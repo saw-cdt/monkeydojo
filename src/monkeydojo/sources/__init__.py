@@ -1,22 +1,29 @@
-"""Where bindings come from. Each source is a module with a load() function."""
+"""Where bindings come from. Each source is a module with a load() function.
 
-from monkeydojo.sources import omarchy
+A source that is not installed returns an empty list instead of failing.
+"""
 
+import subprocess
 
-class SourceError(Exception):
-    pass
-
+from monkeydojo.sources import lazyvim, omarchy
 
 SOURCES = {
     "omarchy": omarchy.load,
+    "lazyvim": lazyvim.load,
+}
+
+LABELS = {
+    "omarchy": "Omarchy",
+    "lazyvim": "LazyVim",
 }
 
 
-def load_all():
-    bindings = []
-    for name, load in SOURCES.items():
+def load_all(names=None):
+    """Return (bindings, errors). A broken source does not stop the others."""
+    bindings, errors = [], []
+    for name in names or SOURCES:
         try:
-            bindings.extend(load())
-        except (FileNotFoundError, OSError, RuntimeError) as error:
-            raise SourceError(f"Could not read {name} keybindings: {error}") from error
-    return bindings
+            bindings.extend(SOURCES[name]())
+        except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as error:
+            errors.append(f"Could not read {LABELS[name]} keybindings: {error}")
+    return bindings, errors

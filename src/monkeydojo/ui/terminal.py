@@ -3,6 +3,7 @@
 from monkeydojo import progress as prog
 from monkeydojo import quiz
 from monkeydojo.levels import LEVEL_NAMES
+from monkeydojo.sources import LABELS
 
 # ANSI color codes
 GREEN = "\033[32m"
@@ -14,25 +15,34 @@ RESET = "\033[0m"
 
 
 def format_prompt(question):
+    label = f"{DIM}[{LABELS[question.binding.source]}]{RESET}"
     subject = f"{BOLD}{question.subject}{RESET}"
     if question.kind == "keys_to_action":
-        return f"What does {subject} do?"
-    return f"What is the shortcut for {subject}?"
+        return f"{label} What does {subject} do?"
+    return f"{label} What is the shortcut for {subject}?"
+
+
+def format_level(level):
+    return f"level {level} ({LEVEL_NAMES[level - 1]})"
 
 
 def show_stats(bindings, progress):
-    unlocked = quiz.unlocked_level(bindings, progress)
-    for level, name in enumerate(LEVEL_NAMES, start=1):
-        learned, total = quiz.level_stats(bindings, progress, level)
-        status = "" if level <= unlocked else f" {DIM}(locked){RESET}"
-        print(f"Level {level}  {name:<11} {learned:>3}/{total} learned{status}")
+    for source, items in quiz.by_source(bindings).items():
+        print(f"{BOLD}{LABELS[source]}{RESET}")
+        unlocked = quiz.unlocked_level(items, progress)
+        for level, name in enumerate(LEVEL_NAMES, start=1):
+            learned, total = quiz.level_stats(items, progress, level)
+            status = "" if level <= unlocked else f" {DIM}(locked){RESET}"
+            print(f"  Level {level}  {name:<11} {learned:>3}/{total} learned{status}")
 
 
 def run(bindings, progress, save, forced_level=None):
     """Main quiz loop. `save` is called after every answer."""
-    pool, level = quiz.build_pool(bindings, progress, forced_level)
-    print(f"{YELLOW}Mon-Key Dojo{RESET} - Level {level}: {LEVEL_NAMES[level - 1]}")
-    print("Answer with 1-4. Type 'q' to quit.\n")
+    pool, levels = quiz.build_pool(bindings, progress, forced_level)
+    print(f"{YELLOW}Mon-Key Dojo{RESET}")
+    for source, level in levels.items():
+        print(f"  {LABELS[source]}: {format_level(level)}")
+    print("Answer with the option number. Type 'q' to quit.\n")
 
     correct_count = total = 0
     last = None
@@ -51,8 +61,9 @@ def run(bindings, progress, save, forced_level=None):
             break
         if answer in ("q", "quit", "exit"):
             break
-        if answer not in ("1", "2", "3", "4"):
-            print("Please type a number from 1 to 4.\n")
+        valid = [str(i) for i in range(1, len(question.options) + 1)]
+        if answer not in valid:
+            print(f"Please type a number from 1 to {len(valid)}.\n")
             continue
 
         total += 1
@@ -67,10 +78,11 @@ def run(bindings, progress, save, forced_level=None):
         save(progress)
 
         if not forced_level:
-            new_pool, new_level = quiz.build_pool(bindings, progress)
-            if new_level > level:
-                print(f"{YELLOW}Level {new_level} unlocked: {LEVEL_NAMES[new_level - 1]}!{RESET}\n")
-                pool, level = new_pool, new_level
+            pool, new_levels = quiz.build_pool(bindings, progress)
+            for source, level in new_levels.items():
+                if level > levels[source]:
+                    print(f"{YELLOW}{LABELS[source]} {format_level(level)} unlocked!{RESET}\n")
+            levels = new_levels
 
     if total:
         print(f"\nScore: {correct_count}/{total} ({correct_count * 100 // total}%)")

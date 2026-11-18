@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "monkeydojo"
-version = "0.2.0"
-description = "A terminal quiz to learn your Omarchy keybindings"
+version = "0.3.0"
+description = "A terminal quiz to learn your Omarchy and LazyVim keybindings"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -20,6 +20,9 @@ monkeydojo = "monkeydojo.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"monkeydojo.sources" = ["*.lua"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

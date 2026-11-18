@@ -6,12 +6,14 @@ import sys
 from monkeydojo import __version__
 from monkeydojo import progress as prog
 from monkeydojo.levels import LEVEL_NAMES
-from monkeydojo.sources import SourceError, load_all
+from monkeydojo.sources import SOURCES, load_all
 from monkeydojo.ui import terminal
 
 
 def parse_args(argv=None):
-    parser = argparse.ArgumentParser(prog="monkeydojo", description="Learn your Omarchy keybindings.")
+    parser = argparse.ArgumentParser(prog="monkeydojo", description="Learn your Omarchy and LazyVim keybindings.")
+    parser.add_argument("--source", choices=list(SOURCES),
+                        help="practice only this source (default: all)")
     parser.add_argument("--level", type=int, choices=range(1, len(LEVEL_NAMES) + 1),
                         help="practice only this level")
     parser.add_argument("--stats", action="store_true", help="show your progress and exit")
@@ -28,10 +30,11 @@ def main(argv=None):
         print("Progress reset.")
         return
 
-    try:
-        bindings = load_all()
-    except SourceError as error:
-        sys.exit(str(error))
+    bindings, errors = load_all([args.source] if args.source else None)
+    for error in errors:
+        print(error, file=sys.stderr)
+    if not bindings:
+        sys.exit("No keybindings found.")
 
     progress = prog.load()
 

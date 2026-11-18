@@ -45,8 +45,8 @@ def test_level_2_unlocks_at_80_percent():
 def test_pool_includes_earlier_levels():
     bindings = make_bindings()
     total = len(LEVELS["omarchy"][0])
-    pool, level = quiz.build_pool(bindings, learned(bindings, total))
-    assert level == 2
+    pool, levels = quiz.build_pool(bindings, learned(bindings, total))
+    assert levels == {"omarchy": 2}
     assert len(pool) == total + 1
 
 
@@ -69,3 +69,22 @@ def test_pick_avoids_repeating_last():
     a = Binding("omarchy", "A", ("1",))
     b = Binding("omarchy", "B", ("2",))
     assert all(quiz.pick([a, b], {}, last=a) == b for _ in range(50))
+
+
+def test_sources_level_up_independently():
+    omarchy = make_bindings()
+    lazyvim = [Binding("lazyvim", f"Vim {i}", (f"Space {i}",)) for i in range(10)]
+    total = len(LEVELS["omarchy"][0])
+    _, levels = quiz.build_pool(omarchy + lazyvim, learned(omarchy, total))
+    assert levels == {"omarchy": 2, "lazyvim": 3}  # lazyvim sample has no level 1 or 2
+
+
+def test_wrong_options_come_from_same_source():
+    omarchy = make_bindings()
+    lazyvim = [Binding("lazyvim", f"Vim {i}", (f"Space {i}",)) for i in range(10)]
+    bindings = omarchy + lazyvim
+    rng = random.Random(1)
+    for _ in range(500):
+        q = quiz.make_question(bindings, rng.choice(lazyvim), rng)
+        for option in q.options:
+            assert option.startswith(("Vim", "Space"))

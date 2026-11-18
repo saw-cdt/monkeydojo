@@ -27,6 +27,30 @@ LEVELS = {
             "Editor", "Calculator", "Audio", "Bluetooth", "Network", "Power",
         },
     ),
+    "lazyvim": (
+        {
+            "Find Files (Root Dir)", "Grep (Root Dir)", "Buffers",
+            "Explorer NeoTree (Root Dir)", "Save File", "Quit All",
+            "Delete Buffer", "Next Buffer", "Prev Buffer",
+            "Go to Left Window", "Go to Right Window",
+            "Go to Upper Window", "Go to Lower Window",
+            "Split Window Right", "Split Window Below",
+            "Goto Definition", "References", "Hover", "Code Action", "Rename",
+            "Toggle comment line", "Terminal (Root Dir)", "Keymaps",
+            "Lazygit (Root Dir)",
+        },
+        {
+            "Recent", "Find Files (cwd)", "Switch to Other Buffer",
+            "Delete Other Buffers", "Delete Window", "Toggle Zoom Mode",
+            "Format", "Line Diagnostics", "Diagnostics (Trouble)",
+            "Next Diagnostic", "Prev Diagnostic", "Next Error", "Prev Error",
+            "Goto Implementation", "Goto Type Definition", "Signature Help",
+            "LSP Symbols", "Rename File", "Search and Replace", "Help Pages",
+            "Command History", "Undotree", "Flash", "Git Blame Line",
+            "Git Status", "Notification History", "Escape and Clear hlsearch",
+            "Toggle Line Numbers", "Toggle Wrap", "New File", "Lazy", "Mason",
+        },
+    ),
 }
 
 LAST_LEVEL = len(LEVEL_NAMES)

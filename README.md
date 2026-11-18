@@ -1,17 +1,19 @@
 # Mon-Key Dojo
 
-A terminal quiz to learn your [Omarchy](https://omarchy.org) keybindings.
+A terminal quiz to learn your [Omarchy](https://omarchy.org) and
+[LazyVim](https://www.lazyvim.org) keybindings.
 
-Omarchy ships with 200+ keybindings. Looking them up is easy; remembering them is not.
-Mon-Key Dojo reads the bindings from your own system and quizzes you on them, so it
-always matches your setup, including any custom bindings you add.
+Omarchy and LazyVim ship with hundreds of keybindings. Looking them up is easy;
+remembering them is not. Mon-Key Dojo reads the bindings from your own system and
+quizzes you on them, so it always matches your setup, including any custom
+bindings you add.
 
 The name is a pun: *mon* ("my"), *key*, and *monkey*.
 
 ## Requirements
 
-- Omarchy
 - Python 3.10+
+- Omarchy and/or Neovim with LazyVim (a source that is not installed is skipped)
 
 No extra dependencies.
 
@@ -37,7 +39,7 @@ PYTHONPATH=src python -m monkeydojo
 Each question is multiple choice, in one of two directions:
 
 ```
-What does SUPER + W do?
+[Omarchy] What does SUPER + W do?
   1) Toggle nightlight
   2) Close window
   3) Next workspace
@@ -45,11 +47,11 @@ What does SUPER + W do?
 > 2
 Correct!
 
-What is the shortcut for Browser?
-  1) SUPER + G
-  2) SUPER SHIFT + RETURN
-  3) SUPER + 3
-  4) SUPER CTRL + D
+[LazyVim] What is the shortcut for Find Files (Root Dir)?
+  1) Space b d
+  2) Space Space
+  3) g r
+  4) Space s k
 >
 ```
 
@@ -64,7 +66,7 @@ Answer with `1`-`4`. Type `q` to quit and see your score.
 | 3     | Advanced   | Everything else                                      |
 
 You start at level 1. The next level unlocks when you have learned 80% of the
-current one. Earlier levels keep showing up so you don't forget them.
+current one. Omarchy and LazyVim level up independently. Earlier levels keep showing up so you don't forget them.
 
 ### Spaced repetition
 
@@ -78,6 +80,7 @@ Progress is saved to `~/.local/share/monkeydojo/progress.json`.
 ### Options
 
 ```
+--source S  practice only one source: omarchy or lazyvim
 --level N   practice only level N
 --stats     show your progress
 --reset     delete your progress
@@ -98,7 +101,9 @@ src/monkeydojo/
 ├── cli.py          # argument parsing, wires everything together
 ├── models.py       # Binding and Question data classes
 ├── sources/        # where bindings come from (one module per source)
-│   └── omarchy.py
+│   ├── omarchy.py
+│   ├── lazyvim.py       # runs nvim --headless with lazyvim_dump.lua
+│   └── lazyvim_dump.lua
 ├── levels.py       # which binding belongs to which level
 ├── quiz.py         # question logic, no I/O
 ├── progress.py     # Leitner boxes and the progress file
@@ -116,7 +121,7 @@ questions to the user. Adding a new source or UI does not touch the core.
 - [x] Filter noisy bindings and add difficulty levels
 - [x] Save progress and use spaced repetition
 - [x] Package layout and tests
-- [ ] LazyVim keybindings
+- [x] LazyVim keybindings
 - [ ] Interactive TUI
 - [ ] Keybinding of the day (notification / Waybar module)
 - [ ] Translations
