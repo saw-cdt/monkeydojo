@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "monkeydojo"
+version = "0.2.0"
+description = "A terminal quiz to learn your Omarchy keybindings"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Alex Quintanilla" }]
+requires-python = ">=3.10"
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+monkeydojo = "monkeydojo.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
