@@ -46,11 +46,39 @@ What is the shortcut for Browser?
 
 Answer with `1`-`4`. Type `q` to quit and see your score.
 
+### Levels
+
+| Level | Name       | What it covers                                       |
+|-------|------------|------------------------------------------------------|
+| 1     | Essentials | Terminal, browser, windows, workspaces, focus        |
+| 2     | Daily use  | Menus, clipboard, screen capture, scratchpad, groups |
+| 3     | Advanced   | Everything else                                      |
+
+You start at level 1. The next level unlocks when you have learned 80% of the
+current one. Earlier levels keep showing up so you don't forget them.
+
+### Spaced repetition
+
+Every binding sits in a box from 0 to 5 (the
+[Leitner system](https://en.wikipedia.org/wiki/Leitner_system)). A right answer
+moves it up one box, a wrong answer sends it back to 0. Bindings in lower boxes
+are asked more often. A binding counts as learned at box 3.
+
+Progress is saved to `~/.local/share/monkeydojo/progress.json`.
+
+### Options
+
+```
+--level N   practice only level N
+--stats     show your progress
+--reset     delete your progress
+```
+
 ## Roadmap
 
 - [x] Multiple-choice quiz from your Omarchy keybindings
-- [ ] Filter noisy bindings and add difficulty levels
-- [ ] Save progress and use spaced repetition
+- [x] Filter noisy bindings and add difficulty levels
+- [x] Save progress and use spaced repetition
 - [ ] LazyVim keybindings
 - [ ] Interactive TUI
 - [ ] Keybinding of the day (notification / Waybar module)
