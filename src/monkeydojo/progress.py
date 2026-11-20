@@ -13,10 +13,10 @@ LEARNED_BOX = 3
 
 FORMAT_VERSION = 2
 
-DEFAULT_PATH = (
-    Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share"))
-    / "monkeydojo" / "progress.json"
-)
+DATA_DIR = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")) / "monkeydojo"
+DEFAULT_PATH = DATA_DIR / "progress.json"
+# Recognizing a shortcut and pressing it are different skills, so they level up apart
+PRACTICE_PATH = DATA_DIR / "practice.json"
 
 
 def box(progress, binding):
@@ -27,12 +27,14 @@ def is_learned(progress, binding):
     return box(progress, binding) >= LEARNED_BOX
 
 
-def record_answer(progress, binding, is_correct):
+def record_answer(progress, binding, is_correct, fast=True):
+    """A right but slow answer counts as correct without moving up a box."""
     entry = progress.setdefault(binding.id, {"box": 0, "seen": 0, "correct": 0})
     entry["seen"] += 1
     if is_correct:
         entry["correct"] += 1
-        entry["box"] = min(entry["box"] + 1, MAX_BOX)
+        if fast:
+            entry["box"] = min(entry["box"] + 1, MAX_BOX)
     else:
         entry["box"] = 0
 

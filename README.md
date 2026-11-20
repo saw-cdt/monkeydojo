@@ -57,6 +57,33 @@ Correct!
 
 Answer with `1`-`4`. Type `q` to quit and see your score.
 
+### Practice mode
+
+A quiz trains you to *recognize* a shortcut. To build muscle memory you have to
+*press* it. With `--practice` you see an action and press its shortcut:
+
+```
+[LazyVim] Find Files (Root Dir)
+> Space f f  ✓ 1.1 s
+
+[LazyVim] Save File
+> Ctrl + S  ✓ 2.6 s, slow (aim for 2.0 s)
+
+[LazyVim] Delete Buffer
+> Space b b  ✗ It was: Space b d
+  now press it: Space b d  ✓
+```
+
+Speed matters: a right answer only moves the binding up a box if it is fast
+(1.5 s plus 0.5 s per key). After a mistake you press the right shortcut once
+before moving on. Press `Ctrl + C` to quit.
+
+Practice has its own progress (`~/.local/share/monkeydojo/practice.json`), so
+`--practice --stats` and `--practice --reset` work on it separately.
+
+For now practice mode supports LazyVim only. Omarchy shortcuts use SUPER, which
+Hyprland catches before the terminal can see it.
+
 ### Levels
 
 | Level | Name       | What it covers                                       |
@@ -82,6 +109,7 @@ Progress is saved to `~/.local/share/monkeydojo/progress.json`.
 ```
 --source S  practice only one source: omarchy or lazyvim
 --level N   practice only level N
+--practice  press the shortcut instead of choosing it
 --stats     show your progress
 --reset     delete your progress
 ```
@@ -100,6 +128,7 @@ python -m venv .venv
 src/monkeydojo/
 ├── cli.py          # argument parsing, wires everything together
 ├── models.py       # Binding and Question data classes
+├── keys.py         # key sequences for practice mode, no I/O
 ├── sources/        # where bindings come from (one module per source)
 │   ├── omarchy.py
 │   ├── lazyvim.py       # runs nvim --headless with lazyvim_dump.lua
@@ -108,10 +137,12 @@ src/monkeydojo/
 ├── quiz.py         # question logic, no I/O
 ├── progress.py     # Leitner boxes and the progress file
 └── ui/
-    └── terminal.py # print/input interface
+    ├── terminal.py  # print/input interface
+    ├── practice.py  # practice mode loop
+    └── keyreader.py # reads raw keypresses from the terminal
 ```
 
-The core (`quiz.py`, `progress.py`, `levels.py`) never prints, reads input or
+The core (`quiz.py`, `progress.py`, `levels.py`, `keys.py`) never prints, reads input or
 runs commands. Sources turn external data into `Binding` objects, and UIs show
 questions to the user. Adding a new source or UI does not touch the core.
 
@@ -122,6 +153,9 @@ questions to the user. Adding a new source or UI does not touch the core.
 - [x] Save progress and use spaced repetition
 - [x] Package layout and tests
 - [x] LazyVim keybindings
+- [x] Practice mode: press the shortcut (LazyVim)
+- [ ] Practice mode for Omarchy (Hyprland submap)
+- [ ] Check the real effect in Hyprland (IPC events)
 - [ ] Interactive TUI
 - [ ] Keybinding of the day (notification / Waybar module)
 - [ ] Translations

@@ -43,3 +43,10 @@ def test_migrates_version_1(tmp_path):
     path = tmp_path / "progress.json"
     path.write_text(json.dumps({"Terminal": {"box": 3, "seen": 3, "correct": 3}}))
     assert prog.box(prog.load(path), TERMINAL) == 3
+
+
+def test_slow_right_answer_keeps_box():
+    progress = {TERMINAL.id: {"box": 2, "seen": 2, "correct": 2}}
+    prog.record_answer(progress, TERMINAL, True, fast=False)
+    assert prog.box(progress, TERMINAL) == 2
+    assert progress[TERMINAL.id]["correct"] == 3
