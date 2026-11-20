@@ -19,6 +19,8 @@ def parse_args(argv=None):
                         help="practice only this level")
     parser.add_argument("--practice", action="store_true",
                         help="press the shortcut instead of choosing it")
+    parser.add_argument("--real", action="store_true",
+                        help="practice Omarchy shortcuts and see them happen")
     parser.add_argument("--stats", action="store_true", help="show your progress and exit")
     parser.add_argument("--reset", action="store_true", help="delete your progress and exit")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -27,6 +29,10 @@ def parse_args(argv=None):
 
 def main(argv=None):
     args = parse_args(argv)
+    if args.real:
+        if args.source == "lazyvim":
+            sys.exit("Real mode is for Omarchy shortcuts only.")
+        args.practice, args.source = True, "omarchy"
 
     path = prog.PRACTICE_PATH if args.practice else prog.DEFAULT_PATH
 
@@ -63,6 +69,6 @@ def main(argv=None):
     if args.practice:
         if not sys.stdin.isatty():
             sys.exit("Practice mode needs an interactive terminal.")
-        practice.run(bindings, progress, save=save, forced_level=args.level)
+        practice.run(bindings, progress, save=save, forced_level=args.level, real_mode=args.real)
     else:
         terminal.run(bindings, progress, save=save, forced_level=args.level)

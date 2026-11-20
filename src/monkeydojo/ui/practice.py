@@ -10,7 +10,7 @@ import sys
 import time
 from contextlib import ExitStack
 
-from monkeydojo import hyprland, keys
+from monkeydojo import hyprland, keys, real
 from monkeydojo import progress as prog
 from monkeydojo import quiz
 from monkeydojo.sources import LABELS
@@ -75,19 +75,22 @@ def catch_shortcut(trap, combos):
     return verdict == "ok", seconds
 
 
-def run(bindings, progress, save, forced_level=None, rng=random):
+def run(bindings, progress, save, forced_level=None, real_mode=False, rng=random):
     fd = sys.stdin.fileno()
     pool, levels = quiz.build_pool(bindings, progress, forced_level)
     has_omarchy = any(b.source == "omarchy" for b in bindings)
     has_terminal = any(b.source != "omarchy" for b in bindings)
 
-    print(f"{YELLOW}Mon-Key Dojo{RESET} {DIM}practice{RESET}")
+    print(f"{YELLOW}Mon-Key Dojo{RESET} {DIM}{'real mode' if real_mode else 'practice'}{RESET}")
     for source, level in levels.items():
         print(f"  {LABELS[source]}: {format_level(level)}")
     print("Press the shortcut for each action.")
     if has_terminal:
         print("Ctrl + C to quit.", end=" ")
-    if has_omarchy:
+    if real_mode:
+        print("Esc to quit. A right answer shows the real action for a moment, then undoes it"
+              " (menus and window/workspace actions); a wrong one does nothing.", end="")
+    elif has_omarchy:
         print("Esc to quit during Omarchy questions; the real action is never run.", end="")
     print("\n")
 
@@ -106,7 +109,13 @@ def run(bindings, progress, save, forced_level=None, rng=random):
             while True:
                 binding = quiz.pick(pool, progress, last)
                 last = binding
-                description, answers = keys.instantiate(binding, rng)
+                # In real mode, switching to the workspace you are on would show nothing
+                exclude = {real.current_workspace()} if real_mode and keys.NUMBER in binding.description else ()
+                description, answers, n = keys.instantiate(binding, rng, exclude)
+
+                def effect(binding=binding, n=n):
+                    if real_mode:
+                        real.show(binding, n)
 
                 if binding.source == "omarchy":
                     answers = keys.hyprland_targets(answers)
@@ -136,9 +145,11 @@ def run(bindings, progress, save, forced_level=None, rng=random):
                         print(f" {GREEN}✓ {seconds:.1f} s{RESET}\n")
                     else:
                         print(f" {YELLOW}✓ {seconds:.1f} s, slow (aim for {limit:.1f} s){RESET}\n")
+                    effect()
                 else:
                     print(f" {RED}✗ It was: {' or '.join(shown)}{RESET}")
                     drill(ask)
+                    effect()
 
                 prog.record_answer(progress, binding, ok, fast)
                 save(progress)

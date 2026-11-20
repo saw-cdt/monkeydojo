@@ -74,9 +74,13 @@ def hyprland_targets(keys):
     return [k for k in keys if k != HYPRLAND_QUIT]
 
 
-def instantiate(binding, rng):
-    """Fill in '<number>' with a real digit: 'Switch to workspace 3', 'SUPER + 3'."""
+def instantiate(binding, rng, exclude=()):
+    """Fill in '<number>' with a digit: ('Switch to workspace 3', ('SUPER + 3',), 3).
+
+    The number is None when the binding has no '<number>'.
+    """
     if NUMBER not in binding.description:
-        return binding.description, binding.keys
-    n = str(rng.randint(1, 9))
-    return binding.description.replace(NUMBER, n), tuple(k.replace(NUMBER, n) for k in binding.keys)
+        return binding.description, binding.keys, None
+    n = rng.choice([i for i in range(1, 10) if i not in exclude])
+    return (binding.description.replace(NUMBER, str(n)),
+            tuple(k.replace(NUMBER, str(n)) for k in binding.keys), n)

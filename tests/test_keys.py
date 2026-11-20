@@ -66,12 +66,27 @@ def test_decoded_names_match_source_names():
 def test_instantiate_fills_in_number():
     import random
     b = Binding("omarchy", "Switch to workspace <number>", ("SUPER + <number>",))
-    description, answers = keys.instantiate(b, random.Random(0))
-    n = description.rsplit(" ", 1)[1]
-    assert n in "123456789"
+    description, answers, n = keys.instantiate(b, random.Random(0))
+    assert 1 <= n <= 9
+    assert description == f"Switch to workspace {n}"
     assert answers == (f"SUPER + {n}",)
     plain = Binding("omarchy", "Close window", ("SUPER + W",))
-    assert keys.instantiate(plain, random.Random(0)) == ("Close window", ("SUPER + W",))
+    assert keys.instantiate(plain, random.Random(0)) == ("Close window", ("SUPER + W",), None)
+
+
+def test_instantiate_can_skip_a_number():
+    import random
+    b = Binding("omarchy", "Switch to workspace <number>", ("SUPER + <number>",))
+    rng = random.Random(0)
+    assert all(keys.instantiate(b, rng, exclude={2})[2] != 2 for _ in range(200))
+
+
+def test_real_actions_exist_in_levels():
+    # Every real-mode action must be a description Omarchy really uses
+    from monkeydojo.levels import LEVELS
+    from monkeydojo.real import ACTIONS
+    known = set().union(*LEVELS["omarchy"])
+    assert set(ACTIONS) <= known
 
 
 def test_hyprland_targets_skip_quit_key():

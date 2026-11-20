@@ -100,6 +100,24 @@ config reload; it never touches your own bindings.
 Omarchy practice needs a running Hyprland session. Without one, `--practice`
 only uses LazyVim.
 
+### Real mode
+
+`--real` practices Omarchy shortcuts and, when you get one right, shows you the
+real effect for a moment and then undoes it:
+
+| Action | What you see |
+|---|---|
+| Workspaces, fullscreen, floating, focus, scratchpad, split | the action for 0.8 s, then it is undone |
+| Menus (Omarchy, System, Keybindings, Apps, Theme, Emojis, Clipboard) | the menu opens for 1.5 s, then closes |
+| Apps (Terminal, Browser, File manager, Editor) | the app opens, and only its new window is closed |
+
+Wrong answers are still caught, so they never run anything. Actions that cannot
+be undone safely (Close window, Lock system, copy/paste, ...) are still asked
+but only check the shortcut. It uses the same progress as `--practice`.
+
+Some effects depend on your layout: "Toggle window split" only works on dwindle
+workspaces, and focus actions need another window in that direction.
+
 ### Levels
 
 | Level | Name       | What it covers                                       |
@@ -126,6 +144,7 @@ Progress is saved to `~/.local/share/monkeydojo/progress.json`.
 --source S  practice only one source: omarchy or lazyvim
 --level N   practice only level N
 --practice  press the shortcut instead of choosing it
+--real      Omarchy practice that shows the real effect of a right answer
 --stats     show your progress
 --reset     delete your progress
 ```
@@ -146,6 +165,7 @@ src/monkeydojo/
 ├── models.py       # Binding and Question data classes
 ├── keys.py         # key sequences for practice mode, no I/O
 ├── hyprland.py     # catches Omarchy shortcuts with a Hyprland submap
+├── real.py         # real mode: runs an action for a moment, then undoes it
 ├── sources/        # where bindings come from (one module per source)
 │   ├── omarchy.py
 │   ├── lazyvim.py       # runs nvim --headless with lazyvim_dump.lua
@@ -172,7 +192,7 @@ questions to the user. Adding a new source or UI does not touch the core.
 - [x] LazyVim keybindings
 - [x] Practice mode: press the shortcut (LazyVim)
 - [x] Practice mode for Omarchy (Hyprland submap)
-- [ ] Check the real effect in Hyprland (IPC events)
+- [x] Real mode: see the effect of a right answer
 - [ ] Interactive TUI
 - [ ] Keybinding of the day (notification / Waybar module)
 - [ ] Translations
