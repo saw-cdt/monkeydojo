@@ -24,8 +24,9 @@ from pathlib import Path
 from monkeydojo.hyprland import lua
 
 PAUSE = 0.8       # seconds the effect stays on screen
-MENU_PAUSE = 1.5  # menus take a moment to open
-APP_PAUSE = 1.5   # how long an app stays open once its window shows up
+MENU_PAUSE = 1.0  # menus take a moment to open
+NO_EFFECT_PAUSE = 1.0  # actions with no effect still leave the answer on screen a moment
+APP_PAUSE = 1.0   # how long an app stays open once its window shows up
 APP_TIMEOUT = 8   # give up waiting for an app window after this
 
 TOGGLE_FULLSCREEN = 'hl.dsp.window.fullscreen({mode = "fullscreen"})'
@@ -99,6 +100,7 @@ def show(binding, n=None, sandbox=None):
     With a sandbox, the grid of windows is checked afterwards and rebuilt if broken.
     """
     if not has_effect(binding):
+        time.sleep(NO_EFFECT_PAUSE)
         return
     try:
         if binding.description in APPS:
