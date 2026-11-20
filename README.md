@@ -118,6 +118,9 @@ but only check the shortcut. It uses the same progress as `--practice`.
 Some effects depend on your layout: "Toggle window split" only works on dwindle
 workspaces, and focus actions need another window in that direction.
 
+The actions that have no effect yet, and how each one could be added, are
+listed in [docs/real-mode.md](docs/real-mode.md).
+
 ### Levels
 
 | Level | Name       | What it covers                                       |
