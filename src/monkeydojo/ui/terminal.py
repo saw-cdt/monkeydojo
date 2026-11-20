@@ -3,6 +3,7 @@
 from monkeydojo import progress as prog
 from monkeydojo import quiz
 from monkeydojo.levels import LEVEL_NAMES
+from monkeydojo.score import Score
 from monkeydojo.sources import LABELS
 
 # ANSI color codes
@@ -36,43 +37,25 @@ def show_stats(bindings, progress):
             print(f"  Level {level}  {name:<11} {learned:>3}/{total} learned{status}")
 
 
-def run(bindings, progress, save, forced_level=None):
-    """Main quiz loop. `save` is called after every answer."""
+def run(bindings, progress, save, view=None, forced_level=None):
+    """Main quiz loop. `save` is called after every answer. Return the Score."""
+    view = view or PlainView()
     pool, levels = quiz.build_pool(bindings, progress, forced_level)
-    print(f"{YELLOW}Mon-Key Dojo{RESET}")
-    for source, level in levels.items():
-        print(f"  {LABELS[source]}: {format_level(level)}")
-    print("Answer with the option number. Type 'q' to quit.\n")
+    view.start(levels)
 
-    correct_count = total = 0
+    score = Score()
     last = None
     while True:
         binding = quiz.pick(pool, progress, last)
         last = binding
         question = quiz.make_question(bindings, binding)
-        print(format_prompt(question))
-        for i, option in enumerate(question.options, start=1):
-            print(f"  {i}) {option}")
-
-        try:
-            answer = input("> ").strip().lower()
-        except (EOFError, KeyboardInterrupt):
-            print()
+        answer = view.choose(question, score, levels)
+        if answer is None:
             break
-        if answer in ("q", "quit", "exit"):
-            break
-        valid = [str(i) for i in range(1, len(question.options) + 1)]
-        if answer not in valid:
-            print(f"Please type a number from 1 to {len(valid)}.\n")
-            continue
 
-        total += 1
-        is_correct = int(answer) - 1 == question.correct_index
-        if is_correct:
-            correct_count += 1
-            print(f"{GREEN}Correct!{RESET}\n")
-        else:
-            print(f"{RED}Wrong. It was: {question.options[question.correct_index]}{RESET}\n")
+        is_correct = answer == question.correct_index
+        score.add(is_correct)
+        view.result(question, answer, score)
 
         prog.record_answer(progress, binding, is_correct)
         save(progress)
@@ -81,9 +64,50 @@ def run(bindings, progress, save, forced_level=None):
             pool, new_levels = quiz.build_pool(bindings, progress)
             for source, level in new_levels.items():
                 if level > levels[source]:
-                    print(f"{YELLOW}{LABELS[source]} {format_level(level)} unlocked!{RESET}\n")
+                    view.unlocked(source, level)
             levels = new_levels
 
-    if total:
-        print(f"\nScore: {correct_count}/{total} ({correct_count * 100 // total}%)")
-    print("Bye.")
+    view.finish(score)
+    return score
+
+
+class PlainView:
+    """print/input, one question after another."""
+
+    def start(self, levels):
+        print(f"{YELLOW}Mon-Key Dojo{RESET}")
+        for source, level in levels.items():
+            print(f"  {LABELS[source]}: {format_level(level)}")
+        print("Answer with the option number. Type 'q' to quit.\n")
+
+    def choose(self, question, score, levels):
+        """Return the chosen option index, or None to quit."""
+        print(format_prompt(question))
+        for i, option in enumerate(question.options, start=1):
+            print(f"  {i}) {option}")
+        valid = [str(i) for i in range(1, len(question.options) + 1)]
+        while True:
+            try:
+                answer = input("> ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print()
+                return None
+            if answer in ("q", "quit", "exit"):
+                return None
+            if answer in valid:
+                return int(answer) - 1
+            print(f"Please type a number from 1 to {len(valid)}.")
+
+    def result(self, question, answer, score):
+        if answer == question.correct_index:
+            print(f"{GREEN}Correct!{RESET}\n")
+        else:
+            print(f"{RED}Wrong. It was: {question.options[question.correct_index]}{RESET}\n")
+
+    def unlocked(self, source, level):
+        print(f"{YELLOW}{LABELS[source]} {format_level(level)} unlocked!{RESET}\n")
+
+    def finish(self, score):
+        if score.total:
+            print(f"\nScore: {score.correct}/{score.total} ({score.percent}%)")
+        print("Bye.")

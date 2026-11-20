@@ -36,6 +36,54 @@ PYTHONPATH=src python -m monkeydojo
 
 ## Usage
 
+Run `monkeydojo` with no options to open the dojo:
+
+```
+                       M O N - K E Y   D O J O
+     ▄▄▀▀▀▀▀▀▄▄█▀      ───────────────────────
+   █▀█▀▄▄██▄▄▀█▀█      learn your keybindings by hand
+   ▀█████▀▀█████▀
+     ▀▀▀▀▀▀▀▀▀▀        Omarchy  ━━━━━━━━  white belt    ●●●○○ 11/16 to yellow
+                       LazyVim  ━━━━━━━━  yellow belt   ●○○○○ 5/26 to green
+                       best combo ×12  in practice
+
+    ▸ Quiz      choose what a shortcut does
+      Practice  press the shortcut
+      Real      press it and see it happen
+      Stats     your belts and boxes
+```
+
+Move with the arrows (or `j`/`k`), change Source and Level with `←`/`→` and start
+with `Enter`. Leaving a session (`q`, `Ctrl + C`, or `Esc` on an Omarchy question)
+takes you back to the menu.
+
+During a session the Session panel shows your combo, score and average time, the
+History panel your last answers, and the ninja monkey reacts to each answer. The
+layout shrinks to fit small terminals, such as the dojo window in real mode.
+
+The monkey takes its fur and face colors from your Omarchy theme
+(`~/.local/state/omarchy/current/theme/colors.toml`), so it changes with the theme.
+
+#### Belts
+
+Each level is a belt: white (level 1), yellow (level 2) and green (level 3).
+Learning the last level gives you the red belt. Every source has its own belt,
+and the dots show how close you are to the next one. The monkey's headband is
+the color of your belt. Quiz and practice have their own belts, because they
+use separate progress. Real mode shares the practice progress, so it shows your
+practice belt for Omarchy.
+
+#### Combo
+
+Every right answer in a row adds to your combo, and a mistake breaks it. The
+monkey cheers every 5 in a row and when you beat your best combo. Quiz, practice
+and real mode each keep their own best combo in `~/.local/share/monkeydojo/stats.json`.
+
+The options below skip the menu and use the line by line interface. `--plain`
+gives you that interface for the quiz.
+
+### Quiz
+
 Each question is multiple choice, in one of two directions:
 
 ```
@@ -164,6 +212,7 @@ Progress is saved to `~/.local/share/monkeydojo/progress.json`.
 --level N   practice only level N
 --practice  press the shortcut instead of choosing it
 --real      Omarchy practice that shows the real effect of a right answer
+--plain     line by line quiz instead of the menu
 --stats     show your progress
 --reset     delete your progress
 ```
@@ -192,16 +241,23 @@ src/monkeydojo/
 │   └── lazyvim_dump.lua
 ├── levels.py       # which binding belongs to which level
 ├── quiz.py         # question logic, no I/O
-├── progress.py     # Leitner boxes and the progress file
+├── progress.py     # Leitner boxes, the progress file and the best combos
+├── belts.py        # which belt a source is at, from its levels
+├── score.py        # score of one session (combo, average time)
 └── ui/
-    ├── terminal.py  # print/input interface
-    ├── practice.py  # practice mode loop
+    ├── tui.py       # full screen interface (curses): menu, sessions, stats
+    ├── ninja.py     # the ninja monkey sprite and its faces
+    ├── theme.py     # the monkey's colors from the Omarchy theme
+    ├── terminal.py  # quiz loop and its line by line view
+    ├── practice.py  # practice mode loop and its line by line view
     └── keyreader.py # reads raw keypresses from the terminal
 ```
 
-The core (`quiz.py`, `progress.py`, `levels.py`, `keys.py`) never prints, reads input or
+The core (`quiz.py`, `progress.py`, `levels.py`, `keys.py`, `score.py`, `belts.py`) never prints, reads input or
 runs commands. Sources turn external data into `Binding` objects, and UIs show
-questions to the user. Adding a new source or UI does not touch the core.
+questions to the user. The quiz and practice loops take a *view* object that
+does all the showing, so the line by line interface and the TUI share the same
+loop. Adding a new source or UI does not touch the core.
 
 ## Roadmap
 
@@ -213,7 +269,7 @@ questions to the user. Adding a new source or UI does not touch the core.
 - [x] Practice mode: press the shortcut (LazyVim)
 - [x] Practice mode for Omarchy (Hyprland submap)
 - [x] Real mode: see the effect of a right answer
-- [ ] Interactive TUI
+- [x] Interactive TUI
 - [ ] Keybinding of the day (notification / Waybar module)
 - [ ] Translations
 

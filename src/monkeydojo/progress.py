@@ -60,6 +60,34 @@ def reset(path=DEFAULT_PATH):
     Path(path).unlink(missing_ok=True)
 
 
+# Records that are not about one binding, like the best combo: {mode: {"best_combo": n}}
+STATS_PATH = DATA_DIR / "stats.json"
+
+
+def load_stats(path=None):
+    try:
+        return json.loads(Path(path or STATS_PATH).read_text())
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def save_stats(stats, path=None):
+    path = Path(path or STATS_PATH)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(stats, indent=2))
+    tmp.replace(path)
+
+
+def record_combo(stats, mode, combo):
+    """Keep the best combo of a mode. Return True if it is a new record."""
+    entry = stats.setdefault(mode, {})
+    if combo > entry.get("best_combo", 0):
+        entry["best_combo"] = combo
+        return True
+    return False
+
+
 def _migrate(data):
     # Version 1 had no "version" key and used plain descriptions (all from Omarchy)
     if "version" not in data:

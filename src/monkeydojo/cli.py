@@ -21,6 +21,8 @@ def parse_args(argv=None):
                         help="press the shortcut instead of choosing it")
     parser.add_argument("--real", action="store_true",
                         help="practice Omarchy shortcuts and see them happen")
+    parser.add_argument("--plain", action="store_true",
+                        help="line by line interface instead of the full screen one")
     parser.add_argument("--stats", action="store_true", help="show your progress and exit")
     parser.add_argument("--reset", action="store_true", help="delete your progress and exit")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -29,6 +31,12 @@ def parse_args(argv=None):
 
 def main(argv=None):
     args = parse_args(argv)
+    # With no mode chosen, open the menu (the full screen interface)
+    if not (args.plain or args.practice or args.real or args.stats or args.reset) \
+            and sys.stdin.isatty() and sys.stdout.isatty():
+        from monkeydojo.ui import tui
+        tui.main(args.source, args.level)
+        return
     if args.real:
         if args.source == "lazyvim":
             sys.exit("Real mode is for Omarchy shortcuts only.")
