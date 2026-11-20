@@ -102,8 +102,17 @@ def run(bindings, progress, save, forced_level=None, real_mode=False, rng=random
 
     total = correct_count = fast_count = 0
     last = None
+    sandbox = None
     with ExitStack() as stack:
         stack.enter_context(key_mode(fd))
+        if real_mode:
+            print(f"{DIM}Setting up the sandbox workspace...{RESET}", flush=True)
+            sandbox = stack.enter_context(real.Sandbox())
+            if sandbox.workspace:
+                print(f"{DIM}Workspace {sandbox.workspace}, with windows A, B and C around this one."
+                      f" You go back to workspace {sandbox.home} when you quit.{RESET}\n")
+            else:
+                print(f"{DIM}No free workspace found, so practicing here.{RESET}\n")
         trap = stack.enter_context(hyprland.Trap(omarchy_combos(bindings))) if has_omarchy else None
         try:
             while True:
@@ -115,7 +124,7 @@ def run(bindings, progress, save, forced_level=None, real_mode=False, rng=random
 
                 def effect(binding=binding, n=n):
                     if real_mode:
-                        real.show(binding, n)
+                        real.show(binding, n, sandbox)
 
                 if binding.source == "omarchy":
                     answers = keys.hyprland_targets(answers)

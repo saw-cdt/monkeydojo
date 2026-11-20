@@ -109,14 +109,30 @@ real effect for a moment and then undoes it:
 |---|---|
 | Workspaces, fullscreen, floating, focus, scratchpad, split | the action for 0.8 s, then it is undone |
 | Menus (Omarchy, System, Keybindings, Apps, Theme, Emojis, Clipboard) | the menu opens for 1.5 s, then closes |
-| Apps (Terminal, Browser, File manager, Editor) | the app opens, and only its new window is closed |
+| Apps (Terminal, Browser, File manager, Editor) | the app opens floating, and only its new window is closed |
 
 Wrong answers are still caught, so they never run anything. Actions that cannot
 be undone safely (Close window, Lock system, copy/paste, ...) are still asked
 but only check the shortcut. It uses the same progress as `--practice`.
 
-Some effects depend on your layout: "Toggle window split" only works on dwindle
-workspaces, and focus actions need another window in that direction.
+#### The sandbox
+
+So that window actions have something to act on, real mode starts on an empty
+workspace (the highest free one from 10 down) with filler windows around the
+dojo terminal:
+
+```
+┌──────┬──────┐
+│ dojo │  A   │
+├──────┼──────┤
+│  B   │  C   │
+└──────┴──────┘
+```
+
+After each effect the grid is checked and rebuilt if an action left it broken.
+When you quit, only the filler windows are closed and the dojo terminal goes
+back to the workspace you started on. If the dojo dies, the filler windows close
+by themselves. If no workspace is free, real mode runs where you are.
 
 The actions that have no effect yet, and how each one could be added, are
 listed in [docs/real-mode.md](docs/real-mode.md).
@@ -168,7 +184,8 @@ src/monkeydojo/
 ├── models.py       # Binding and Question data classes
 ├── keys.py         # key sequences for practice mode, no I/O
 ├── hyprland.py     # catches Omarchy shortcuts with a Hyprland submap
-├── real.py         # real mode: runs an action for a moment, then undoes it
+├── real.py         # real mode: effects, undo and the sandbox workspace
+├── sandbox_window.py # a filler window for the sandbox (one big letter)
 ├── sources/        # where bindings come from (one module per source)
 │   ├── omarchy.py
 │   ├── lazyvim.py       # runs nvim --headless with lazyvim_dump.lua
