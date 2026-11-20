@@ -4,12 +4,10 @@ import argparse
 import sys
 
 from monkeydojo import __version__
+from monkeydojo import hyprland
 from monkeydojo import progress as prog
 from monkeydojo.levels import LEVEL_NAMES
 from monkeydojo.sources import SOURCES, load_all
-
-# Omarchy shortcuts use SUPER, which Hyprland catches before the terminal sees it
-PRACTICE_SOURCES = ["lazyvim"]
 from monkeydojo.ui import practice, terminal
 
 
@@ -20,7 +18,7 @@ def parse_args(argv=None):
     parser.add_argument("--level", type=int, choices=range(1, len(LEVEL_NAMES) + 1),
                         help="practice only this level")
     parser.add_argument("--practice", action="store_true",
-                        help="press the shortcut instead of choosing it (LazyVim only for now)")
+                        help="press the shortcut instead of choosing it")
     parser.add_argument("--stats", action="store_true", help="show your progress and exit")
     parser.add_argument("--reset", action="store_true", help="delete your progress and exit")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -38,16 +36,18 @@ def main(argv=None):
         return
 
     sources = [args.source] if args.source else None
-    if args.practice:
-        if args.source and args.source not in PRACTICE_SOURCES:
-            sys.exit(f"Practice mode does not support {args.source} yet.")
-        sources = sources or PRACTICE_SOURCES
+    # Omarchy practice needs a running Hyprland to catch the shortcuts
+    hyprland_ok = bool(hyprland.available())
+    if args.practice and not hyprland_ok:
+        if args.source == "omarchy":
+            sys.exit("Omarchy practice needs a running Hyprland session.")
+        sources = sources or ["lazyvim"]
 
     bindings, errors = load_all(sources)
     for error in errors:
         print(error, file=sys.stderr)
     if args.practice:
-        bindings = practice.typable(bindings)
+        bindings = practice.practicable(bindings, hyprland_ok)
     if not bindings:
         sys.exit("No keybindings found.")
 

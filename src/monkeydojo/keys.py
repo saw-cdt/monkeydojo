@@ -4,6 +4,8 @@ A key string like "Ctrl + W d" is a sequence of tokens: ["Ctrl + W", "d"].
 """
 
 QUIT = "Ctrl + C"
+HYPRLAND_QUIT = "ESCAPE"
+NUMBER = "<number>"
 
 SPECIAL = {"Space", "Tab", "Enter", "Esc", "Backspace", "Up", "Down", "Left", "Right"}
 ARROWS = {"Up", "Down", "Left", "Right"}
@@ -63,5 +65,18 @@ def check(typed, sequences):
     return "wrong"
 
 
-def fast_limit(sequence):
-    return FAST_BASE + FAST_PER_KEY * len(sequence)
+def fast_limit(key_count):
+    return FAST_BASE + FAST_PER_KEY * key_count
+
+
+def hyprland_targets(keys):
+    """Omarchy shortcuts that can be caught (Escape is how you quit)."""
+    return [k for k in keys if k != HYPRLAND_QUIT]
+
+
+def instantiate(binding, rng):
+    """Fill in '<number>' with a real digit: 'Switch to workspace 3', 'SUPER + 3'."""
+    if NUMBER not in binding.description:
+        return binding.description, binding.keys
+    n = str(rng.randint(1, 9))
+    return binding.description.replace(NUMBER, n), tuple(k.replace(NUMBER, n) for k in binding.keys)

@@ -81,8 +81,24 @@ before moving on. Press `Ctrl + C` to quit.
 Practice has its own progress (`~/.local/share/monkeydojo/practice.json`), so
 `--practice --stats` and `--practice --reset` work on it separately.
 
-For now practice mode supports LazyVim only. Omarchy shortcuts use SUPER, which
-Hyprland catches before the terminal can see it.
+#### Omarchy shortcuts
+
+Omarchy shortcuts use SUPER, which Hyprland handles before the terminal sees it.
+So during an Omarchy question Mon-Key Dojo switches Hyprland to a temporary
+submap that catches your keys:
+
+- the shortcut is recognized but **its real action never runs**, so you can
+  practice "Close window" without closing anything
+- workspace questions use a random number ("Switch to workspace 3")
+- press `Esc` to quit
+
+You always get your keyboard back: the submap is left after every question,
+each question times out after 20 s, and if the program dies Hyprland leaves the
+submap by itself within 30 s. The submap stays defined but unused until the next
+config reload; it never touches your own bindings.
+
+Omarchy practice needs a running Hyprland session. Without one, `--practice`
+only uses LazyVim.
 
 ### Levels
 
@@ -129,6 +145,7 @@ src/monkeydojo/
 ├── cli.py          # argument parsing, wires everything together
 ├── models.py       # Binding and Question data classes
 ├── keys.py         # key sequences for practice mode, no I/O
+├── hyprland.py     # catches Omarchy shortcuts with a Hyprland submap
 ├── sources/        # where bindings come from (one module per source)
 │   ├── omarchy.py
 │   ├── lazyvim.py       # runs nvim --headless with lazyvim_dump.lua
@@ -154,7 +171,7 @@ questions to the user. Adding a new source or UI does not touch the core.
 - [x] Package layout and tests
 - [x] LazyVim keybindings
 - [x] Practice mode: press the shortcut (LazyVim)
-- [ ] Practice mode for Omarchy (Hyprland submap)
+- [x] Practice mode for Omarchy (Hyprland submap)
 - [ ] Check the real effect in Hyprland (IPC events)
 - [ ] Interactive TUI
 - [ ] Keybinding of the day (notification / Waybar module)

@@ -33,7 +33,7 @@ def test_check():
 
 
 def test_fast_limit_grows_with_length():
-    assert keys.fast_limit(["Space", "f", "f"]) > keys.fast_limit(["Ctrl + S"])
+    assert keys.fast_limit(3) > keys.fast_limit(1)
 
 
 def test_decode_plain_and_control():
@@ -61,3 +61,51 @@ def test_decoded_names_match_source_names():
     assert decode(b"\x17d") == keys.split_keys(format_keys("<C-W>d"))
     assert decode(b"\x1bn") == keys.split_keys(format_keys("<a-n>"))
     assert decode(b"\x1b[1;5A") == keys.split_keys(format_keys("<C-Up>"))
+
+
+def test_instantiate_fills_in_number():
+    import random
+    b = Binding("omarchy", "Switch to workspace <number>", ("SUPER + <number>",))
+    description, answers = keys.instantiate(b, random.Random(0))
+    n = description.rsplit(" ", 1)[1]
+    assert n in "123456789"
+    assert answers == (f"SUPER + {n}",)
+    plain = Binding("omarchy", "Close window", ("SUPER + W",))
+    assert keys.instantiate(plain, random.Random(0)) == ("Close window", ("SUPER + W",))
+
+
+def test_hyprland_targets_skip_quit_key():
+    assert keys.hyprland_targets(("ESCAPE", "SUPER + ESCAPE")) == ["SUPER + ESCAPE"]
+
+
+def test_to_bind_keys():
+    from monkeydojo.hyprland import to_bind_keys
+    assert to_bind_keys("SUPER SHIFT + RETURN") == "SUPER + SHIFT + RETURN"
+    assert to_bind_keys("SUPER + W") == "SUPER + W"
+    assert to_bind_keys("F9") == "F9"
+    assert to_bind_keys("SHIFT CTRL ALT + TAB") == "SHIFT + CTRL + ALT + TAB"
+
+
+def test_judge_hyprland_events():
+    from monkeydojo.hyprland import judge
+    wanted = {7}
+    assert judge(["mod", "wrong"], wanted) is None                 # SUPER alone
+    assert judge(["wrong", "mod"], wanted) is None                 # either order
+    assert judge(["key 7", "wrong"], wanted) == ("ok", 7)          # right shortcut + catchall
+    assert judge(["key 3", "wrong"], wanted) == ("wrong", None)    # another Omarchy shortcut
+    assert judge(["wrong"], wanted) == ("wrong", None)             # any other key
+    assert judge(["mod", "wrong", "wrong"], wanted) == ("wrong", None)  # SUPER then E, very fast
+    assert judge(["quit", "wrong"], wanted) == ("quit", None)
+
+
+def test_omarchy_combos_fill_in_numbers():
+    from monkeydojo.ui.practice import omarchy_combos
+    bindings = [
+        Binding("omarchy", "Switch to workspace <number>", ("SUPER + <number>",)),
+        Binding("omarchy", "Browser", ("SUPER SHIFT + RETURN",)),
+        Binding("lazyvim", "Save File", ("Ctrl + S",)),
+    ]
+    combos = omarchy_combos(bindings)
+    assert "SUPER + 0" in combos and "SUPER + 9" in combos
+    assert "SUPER + SHIFT + RETURN" in combos
+    assert len(combos) == 11
