@@ -32,8 +32,8 @@ def test_check():
     assert keys.check(["g"], sequences) == "wrong"
 
 
-def test_fast_limit_grows_with_length():
-    assert keys.fast_limit(3) > keys.fast_limit(1)
+def test_fast_limit_is_three_seconds():
+    assert keys.fast_limit(1) == keys.fast_limit(3) == 3.0
 
 
 def test_decode_plain_and_control():

@@ -31,16 +31,55 @@ def passed_stats(bindings, progress, level):
     return passed, len(items)
 
 
-def unlocked_level(bindings, progress):
-    """Highest level the user can practice. Pass bindings from a single source."""
+def level_done(bindings, progress, level, exams=False):
+    """Whether a level is behind you: its exam is passed, or (without exams) it is all learned."""
+    passed, total = passed_stats(bindings, progress, level)
+    if not total:
+        return True  # an empty level is skipped
+    if exams:
+        return prog.exam_passed(progress, bindings[0].source, level)
+    return passed >= UNLOCK_RATIO * total
+
+
+def unlocked_level(bindings, progress, exams=False):
+    """Highest level the user can practice. Pass bindings from a single source.
+
+    With `exams` (practice and real mode) a level only opens after the exam of the
+    one before it. The quiz has no exams: learning a level opens the next one.
+    """
     for level in range(1, LAST_LEVEL):
-        passed, total = passed_stats(bindings, progress, level)
-        if passed < UNLOCK_RATIO * total:
+        if not level_done(bindings, progress, level, exams):
             return level
     return LAST_LEVEL
 
 
-def build_pool(bindings, progress, forced_level=None):
+def exam_plan(bindings, progress):
+    """{source: (level, bindings to ask)} for every source with an exam left to pass.
+
+    The exam is for the current level, learned or not, so you can skip a level
+    you already know.
+    """
+    plan = {}
+    for source, items in by_source(bindings).items():
+        level = unlocked_level(items, progress, exams=True)
+        if level_done(items, progress, level, exams=True):
+            continue  # every exam passed
+        plan[source] = (level, [b for b in items if level_of(b) == level])
+    return plan
+
+
+def moves_by_level(bindings):
+    """{source: {level: bindings}}, every level present, in the order of the source."""
+    out = {}
+    for source, items in by_source(bindings).items():
+        levels = {level: [] for level in range(1, LAST_LEVEL + 1)}
+        for b in items:
+            levels[level_of(b)].append(b)
+        out[source] = {level: items for level, items in levels.items() if items}
+    return out
+
+
+def build_pool(bindings, progress, forced_level=None, exams=False):
     """Return (bindings to ask about, {source: current level}).
 
     Each source levels up on its own.
@@ -51,7 +90,7 @@ def build_pool(bindings, progress, forced_level=None):
             level = forced_level
             pool += [b for b in items if level_of(b) == level]
         else:
-            level = unlocked_level(items, progress)
+            level = unlocked_level(items, progress, exams)
             # Include earlier levels so old bindings keep getting reviewed
             pool += [b for b in items if level_of(b) <= level]
         levels[source] = level

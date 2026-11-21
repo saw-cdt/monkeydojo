@@ -19,6 +19,7 @@ class Belt:
     index: int        # 0 white ... 3 red
     learned: int      # bindings learned in the current level
     needed: int       # learned bindings needed for the next belt (0 at the red belt)
+    exam_ready: bool = False  # everything is learned, only the exam is left
 
     @property
     def name(self):
@@ -36,19 +37,19 @@ class Belt:
         return min(STRIPES, STRIPES * self.learned // self.needed)
 
 
-def belt(bindings, progress):
-    """Belt for the bindings of one source."""
-    level = quiz.unlocked_level(bindings, progress)
+def belt(bindings, progress, exams=False):
+    """Belt for the bindings of one source. With `exams`, a belt is won by its exam."""
+    level = quiz.unlocked_level(bindings, progress, exams)
     learned, total = quiz.passed_stats(bindings, progress, level)
     needed = math.ceil(quiz.UNLOCK_RATIO * total)
-    if level == LAST_LEVEL and learned >= needed:
+    if level == LAST_LEVEL and quiz.level_done(bindings, progress, level, exams):
         return Belt(len(BELTS) - 1, learned, 0)
-    return Belt(level - 1, learned, needed)
+    return Belt(level - 1, learned, needed, exams and learned >= needed)
 
 
-def belts(bindings, progress):
+def belts(bindings, progress, exams=False):
     """{source: Belt} for every source in `bindings`."""
-    return {source: belt(items, progress) for source, items in quiz.by_source(bindings).items()}
+    return {source: belt(items, progress, exams) for source, items in quiz.by_source(bindings).items()}
 
 
 def best(belts_by_source):

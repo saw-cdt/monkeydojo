@@ -10,7 +10,7 @@ import random
 import signal
 import sys
 import time
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
 
 from monkeydojo import hyprland, keys, learn, real
 from monkeydojo import progress as prog
@@ -78,31 +78,69 @@ def catch_shortcut(view, trap, combos):
     return verdict == "ok", seconds, pressed
 
 
-def run(bindings, progress, save, view=None, forced_level=None, real_mode=False, rng=random):
-    """Ask until the user quits. Return the Score."""
-    view = view or PlainView()
-    fd = sys.stdin.fileno()
-    pool, levels = quiz.build_pool(bindings, progress, forced_level)
-    has_omarchy = any(b.source == "omarchy" for b in bindings)
-    has_terminal = any(b.source != "omarchy" for b in bindings)
-    view.start(levels, real_mode, has_omarchy, has_terminal)
+# Seconds a wrong exam answer stays on screen before the next question
+EXAM_PAUSE = 1.5
 
+
+@contextmanager
+def keyboard(view, bindings, real_mode=False):
+    """Everything a session needs to read answers. Yield (trap, sandbox)."""
     # Make sure the submap is removed if the terminal is closed or the process is killed
     def stop(signum, frame):
         raise SystemExit(1)
     for sig in (signal.SIGTERM, signal.SIGHUP):
         signal.signal(sig, stop)
 
-    score = Score()
-    last = None
-    sandbox = None
     with ExitStack() as stack:
-        stack.enter_context(view.input_mode(fd))
+        stack.enter_context(view.input_mode(sys.stdin.fileno()))
+        sandbox = None
         if real_mode:
             view.message("Setting up the sandbox workspace...")
             sandbox = stack.enter_context(real.Sandbox())
             view.sandbox_ready(sandbox)
+        has_omarchy = any(b.source == "omarchy" for b in bindings)
         trap = stack.enter_context(hyprland.Trap(omarchy_combos(bindings))) if has_omarchy else None
+        yield trap, sandbox
+
+
+def prepare(view, trap, binding, rng, exclude=()):
+    """Return (description, ask, shown, key count, number) for one question."""
+    description, answers, n = keys.instantiate(binding, rng, exclude)
+    if binding.source == "omarchy":
+        answers = keys.hyprland_targets(answers)
+        def ask():
+            return catch_shortcut(view, trap, answers)
+        return description, ask, answers, 1, n
+    sequences = keys.targets(binding)
+    def ask():
+        return read_sequence(view, sys.stdin.fileno(), sequences)
+    return description, ask, [" ".join(s) for s in sequences], min(len(s) for s in sequences), n
+
+
+def answer(view, ask, length, score):
+    """Ask once and show the verdict. Return (ok, fast, pressed)."""
+    ok, seconds, pressed = ask()
+    if not ok:
+        score.add(False)
+        return False, False, pressed
+    limit = keys.fast_limit(length)
+    fast = seconds <= limit
+    score.add(True, fast, seconds)
+    view.right(seconds, limit, fast, score)
+    return True, fast, pressed
+
+
+def run(bindings, progress, save, view=None, forced_level=None, real_mode=False, rng=random):
+    """Ask until the user quits. Return the Score."""
+    view = view or PlainView()
+    pool, levels = quiz.build_pool(bindings, progress, forced_level, exams=True)
+    has_omarchy = any(b.source == "omarchy" for b in bindings)
+    has_terminal = any(b.source != "omarchy" for b in bindings)
+    view.start(levels, real_mode, has_omarchy, has_terminal)
+
+    score = Score()
+    last = None
+    with keyboard(view, bindings, real_mode) as (trap, sandbox):
         try:
             while True:
                 new = learn.next_new(pool, progress)
@@ -110,20 +148,7 @@ def run(bindings, progress, save, view=None, forced_level=None, real_mode=False,
                 last = binding
                 # In real mode, switching to the workspace you are on would show nothing
                 exclude = {real.current_workspace()} if real_mode and keys.NUMBER in binding.description else ()
-                description, answers, n = keys.instantiate(binding, rng, exclude)
-
-                if binding.source == "omarchy":
-                    answers = keys.hyprland_targets(answers)
-                    def ask(answers=answers):
-                        return catch_shortcut(view, trap, answers)
-                    shown = answers
-                    length = 1
-                else:
-                    sequences = keys.targets(binding)
-                    def ask(sequences=sequences):
-                        return read_sequence(view, fd, sequences)
-                    shown = [" ".join(s) for s in sequences]
-                    length = min(len(s) for s in sequences)
+                description, ask, shown, length, n = prepare(view, trap, binding, rng, exclude)
 
                 if new:
                     # First time: show the move and press it once, without a score
@@ -136,16 +161,8 @@ def run(bindings, progress, save, view=None, forced_level=None, real_mode=False,
                     continue
 
                 view.question(binding, description, score, levels)
-                ok, seconds, pressed = ask()
-
-                fast = False
-                if ok:
-                    limit = keys.fast_limit(length)
-                    fast = seconds <= limit
-                    score.add(True, fast, seconds)
-                    view.right(seconds, limit, fast, score)
-                else:
-                    score.add(False)
+                ok, fast, pressed = answer(view, ask, length, score)
+                if not ok:
                     mistake = learn.meaning(bindings, binding.source, pressed) if pressed else None
                     view.wrong(shown, score, mistake)
                     drill(view, ask)
@@ -156,7 +173,7 @@ def run(bindings, progress, save, view=None, forced_level=None, real_mode=False,
                 save(progress)
 
                 if not forced_level:
-                    pool, new_levels = quiz.build_pool(bindings, progress)
+                    pool, new_levels = quiz.build_pool(bindings, progress, exams=True)
                     for source, level in new_levels.items():
                         if level > levels[source]:
                             view.unlocked(source, level)
@@ -166,6 +183,55 @@ def run(bindings, progress, save, view=None, forced_level=None, real_mode=False,
 
     view.finish(score)
     return score
+
+
+def exam(bindings, progress, save, view=None, rng=random):
+    """Belt exam: every binding of the current level once, all right and fast.
+
+    A fast right answer counts the binding as learned, even if the exam is failed.
+    Return {source: (passed, right, total)}, or {} if there is nothing to examine.
+    """
+    view = view or PlainView()
+    plan = quiz.exam_plan(bindings, progress)
+    if not plan:
+        return {}
+    questions = [b for _, items in plan.values() for b in items]
+    rng.shuffle(questions)
+    levels = {source: level for source, (level, _) in plan.items()}
+    right = dict.fromkeys(plan, 0)
+    if view.exam_start(levels, {source: len(items) for source, (_, items) in plan.items()}) is False:
+        return {}
+
+    score = Score()
+    # Every shortcut of these sources can be caught, so a wrong one can be named
+    with keyboard(view, [b for b in bindings if b.source in plan]) as (trap, _):
+        try:
+            for binding in questions:
+                description, ask, shown, length, _ = prepare(view, trap, binding, rng)
+                view.question(binding, description, score, levels)
+                ok, fast, pressed = answer(view, ask, length, score)
+                if ok and fast:
+                    prog.learn_now(progress, binding)
+                    right[binding.source] += 1
+                else:
+                    if not ok:
+                        mistake = learn.meaning(bindings, binding.source, pressed) if pressed else None
+                        view.wrong(shown, score, mistake)
+                    prog.record_answer(progress, binding, ok, fast)
+                    time.sleep(EXAM_PAUSE)  # time to read the right answer
+                save(progress)
+        except (Quit, KeyboardInterrupt):
+            pass
+
+    results = {}
+    for source, (level, items) in plan.items():
+        passed = right[source] == len(items)
+        if passed:
+            prog.pass_exam(progress, source, level)
+        results[source] = (passed, right[source], len(items))
+    save(progress)
+    view.exam_finish(results, levels)
+    return results
 
 
 def drill(view, ask):
@@ -246,6 +312,20 @@ class PlainView:
 
     def unlocked(self, source, level):
         print(f"{YELLOW}{LABELS[source]} {format_level(level)} unlocked!{RESET}\n")
+
+    def exam_start(self, levels, counts):
+        print(f"{YELLOW}Belt exam{RESET}")
+        for source, level in levels.items():
+            print(f"  {LABELS[source]}: {format_level(level)}, {counts[source]} moves")
+        print(f"{sum(counts.values())} questions. Get every one right in under 3 s to earn the next belt.")
+        print("Ctrl + C or Esc to stop.\n")
+
+    def exam_finish(self, results, levels):
+        print()
+        for source, (passed, right, total) in results.items():
+            verdict = f"{GREEN}passed{RESET}" if passed else f"{RED}not passed{RESET}"
+            print(f"{LABELS[source]} {format_level(levels[source])}: {right}/{total}, {verdict}")
+        print(f"{DIM}Right answers count as learned either way.{RESET}")
 
     def finish(self, score):
         print()

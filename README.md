@@ -50,7 +50,9 @@ Run `monkeydojo` with no options to open the dojo:
     ▸ Quiz      choose what a shortcut does
       Practice  press the shortcut
       Real      press it and see it happen
+      Exam      all right in 3 s for the next belt
       Stats     your belts and boxes
+      Moves     every shortcut by level
 ```
 
 Move with the arrows (or `j`/`k`), change Source and Level with `←`/`→` and start
@@ -67,11 +69,28 @@ The monkey takes its fur and face colors from your Omarchy theme
 #### Belts
 
 Each level is a belt: white (level 1), yellow (level 2) and green (level 3).
-Learning the last level gives you the red belt. Every source has its own belt,
+Passing the last level gives you the red belt. Every source has its own belt,
 and the dots show how close you are to the next one. The monkey's headband is
 the color of your belt. Quiz and practice have their own belts, because they
 use separate progress. Real mode shares the practice progress, so it shows your
 practice belt for Omarchy.
+
+In the quiz, learning every binding of a level gives you the next belt. In
+practice and real mode you also have to pass the belt exam.
+
+#### Belt exam
+
+**Exam** in the menu (or `--exam`) asks every binding of your current level
+once, in random order. To pass, every answer must be right and take under 3 s.
+When you have learned the whole level the menu tells you the exam is ready, but
+you can take it at any time: if you already know a level, pass its exam and skip
+it. Every fast right answer counts the binding as learned, even when you fail
+the exam.
+
+#### Moves
+
+**Moves** in the menu (or `--moves`) lists every shortcut by source and level,
+marked ✓ where you have learned it in the quiz (Q) and in practice (P).
 
 #### Combo
 
@@ -115,7 +134,7 @@ A quiz trains you to *recognize* a shortcut. To build muscle memory you have to
 > Space f f  ✓ 1.1 s
 
 [LazyVim] Save File
-> Ctrl + S  ✓ 2.6 s, slow (aim for 2.0 s)
+> Ctrl + S  ✓ 3.4 s, slow (aim for 3.0 s)
 
 [LazyVim] Delete Buffer
 > Space b b  ✗ It was: Space b d
@@ -123,7 +142,7 @@ A quiz trains you to *recognize* a shortcut. To build muscle memory you have to
 ```
 
 Speed matters: a right answer only moves the binding up a box if it is fast
-(1.5 s plus 0.5 s per key). After a mistake you press the right shortcut once
+(under 3 s). After a mistake you press the right shortcut once
 before moving on. Press `Ctrl + C` to quit.
 
 Practice has its own progress (`~/.local/share/monkeydojo/practice.json`), so
@@ -194,7 +213,8 @@ listed in [docs/real-mode.md](docs/real-mode.md).
 | 3     | Advanced   | Everything else                                      |
 
 You start at level 1. The next level unlocks when you have learned every binding
-of the current one. Once a binding is learned, a later mistake does not lock the
+of the current one (in the quiz) or passed its belt exam (in practice and real
+mode). Once a binding is learned, a later mistake does not lock the
 level again. Omarchy and LazyVim level up independently. Earlier levels keep
 showing up so you don't forget them.
 
@@ -234,6 +254,8 @@ Progress is saved to `~/.local/share/monkeydojo/progress.json`.
 --level N   practice only level N
 --practice  press the shortcut instead of choosing it
 --real      Omarchy practice that shows the real effect of a right answer
+--exam      take the belt exam of your current level
+--moves     list every shortcut by level
 --plain     line by line quiz instead of the menu
 --stats     show your progress
 --reset     delete your progress

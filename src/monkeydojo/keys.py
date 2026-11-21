@@ -13,9 +13,8 @@ ARROWS = {"Up", "Down", "Left", "Right"}
 CTRL_SYMBOLS = {"/", "\\", "]", "Space"}
 CTRL_CLASHES = {"I", "M", "["}
 
-# Time allowed for a right answer to count as fast (muscle memory, not recall)
-FAST_BASE = 1.5
-FAST_PER_KEY = 0.5
+# Seconds for a right answer to count as fast (muscle memory, not recall)
+FAST_LIMIT = 3.0
 
 
 def split_keys(keys):
@@ -66,7 +65,8 @@ def check(typed, sequences):
 
 
 def fast_limit(key_count):
-    return FAST_BASE + FAST_PER_KEY * key_count
+    """The same for every shortcut, however many keys it has."""
+    return FAST_LIMIT
 
 
 def hyprland_targets(keys):

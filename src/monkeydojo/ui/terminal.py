@@ -27,14 +27,28 @@ def format_level(level):
     return f"level {level} ({LEVEL_NAMES[level - 1]})"
 
 
-def show_stats(bindings, progress):
+def show_stats(bindings, progress, exams=False):
     for source, items in quiz.by_source(bindings).items():
         print(f"{BOLD}{LABELS[source]}{RESET}")
-        unlocked = quiz.unlocked_level(items, progress)
+        unlocked = quiz.unlocked_level(items, progress, exams)
         for level, name in enumerate(LEVEL_NAMES, start=1):
             learned, total = quiz.level_stats(items, progress, level)
             status = "" if level <= unlocked else f" {DIM}(locked){RESET}"
+            if exams and prog.exam_passed(progress, source, level):
+                status = f" {GREEN}exam passed{RESET}"
             print(f"  Level {level}  {name:<11} {learned:>3}/{total} learned{status}")
+
+
+def show_moves(bindings, progress):
+    """Every shortcut, by source and level. ✓ marks the ones learned in this progress."""
+    for source, levels in quiz.moves_by_level(bindings).items():
+        for level, items in levels.items():
+            print(f"{BOLD}{LABELS[source]} · level {level} {LEVEL_NAMES[level - 1]}{RESET} {DIM}({len(items)}){RESET}")
+            width = max(len(" or ".join(b.keys)) for b in items)
+            for b in items:
+                mark = f"{GREEN}✓{RESET}" if prog.is_passed(progress, b) else " "
+                print(f"  {mark} {' or '.join(b.keys):<{width}}  {b.description}")
+            print()
 
 
 def run(bindings, progress, save, view=None, forced_level=None):
@@ -113,6 +127,10 @@ class PlainView:
               f" is {BOLD}{binding.description}{RESET}")
         for hint in hints:
             print(f"  {DIM}{hint}{RESET}")
+        note = "Just remember it, don't press it"
+        if binding.source == "omarchy":
+            note += " (here it would really run)"
+        print(f"  {YELLOW}{note}.{RESET}")
         try:
             answer = input(f"{DIM}Enter to continue, q to quit{RESET} ").strip().lower()
         except (EOFError, KeyboardInterrupt):

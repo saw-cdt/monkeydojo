@@ -38,7 +38,9 @@ MODES = {
     "quiz": ("Quiz", "choose what a shortcut does"),
     "practice": ("Practice", "press the shortcut"),
     "real": ("Real", "press it and see it happen"),
+    "exam": ("Exam", "all right in 3 s for the next belt"),
     "stats": ("Stats", "your belts and boxes"),
+    "moves": ("Moves", "every shortcut by level"),
     "quit": ("Quit", ""),
 }
 
@@ -55,6 +57,11 @@ def main(source=None, level=None):
 
 def progress_path(mode):
     return prog.DEFAULT_PATH if mode == "quiz" else prog.PRACTICE_PATH
+
+
+def uses_exams(mode):
+    """Practice and real mode win belts with an exam; the quiz by learning."""
+    return mode != "quiz"
 
 
 def stats_key(mode):
@@ -232,9 +239,12 @@ class App:
         return [("●" * lit, self.fg(curses.COLOR_YELLOW)), ("○" * (STRIPES - lit), curses.A_DIM)]
 
     def to_next(self, b):
-        """'11/16 to yellow', or 'mastered' at the red belt."""
+        """'11/16 to yellow', 'exam for yellow', or 'mastered' at the red belt."""
         if not b.next_name:
             return [(" mastered", self.fg(curses.COLOR_RED) | curses.A_BOLD)]
+        if b.exam_ready:
+            return [(" exam for ", self.fg(curses.COLOR_YELLOW) | curses.A_BOLD),
+                    (b.next_name, self.fg(self.belt_color(b.next_name)))]
         return [(f" {b.learned}/{b.needed} to ", curses.A_DIM),
                 (b.next_name, self.fg(self.belt_color(b.next_name)))]
 
@@ -281,6 +291,8 @@ class App:
                 return
             if mode == "stats":
                 Stats(self).show()
+            elif mode == "moves":
+                Moves(self).show()
             else:
                 self.session(mode)
             self.flush_input()
@@ -288,7 +300,7 @@ class App:
     def bindings_for(self, mode, source=None):
         source = "omarchy" if mode == "real" else source
         items = [b for b in self.bindings if source in (None, b.source)]
-        if mode in ("practice", "real"):
+        if mode in ("practice", "real", "exam"):
             items = practice.practicable(items, self.hyprland_ok)
         return items
 
@@ -298,14 +310,17 @@ class App:
         Real mode practices Omarchy only and shares the practice progress, so it
         shows the practice belt of Omarchy.
         """
-        return belt_rules.belts(self.bindings_for(mode), prog.load(progress_path(mode)))
+        return belt_rules.belts(self.bindings_for(mode), prog.load(progress_path(mode)), uses_exams(mode))
 
     def unavailable(self, mode):
         """Why a mode cannot start right now, or None."""
         if mode == "real" and not self.hyprland_ok:
             return "needs Hyprland"
-        if mode in MODES and mode not in ("stats", "quit") and not self.bindings_for(mode, self.source):
+        if mode in MODES and mode not in ("stats", "moves", "quit") and not self.bindings_for(mode, self.source):
             return "no keybindings"
+        if mode == "exam" and not quiz.exam_plan(self.bindings_for(mode, self.source),
+                                                 prog.load(progress_path(mode))):
+            return "every exam passed"
         return None
 
     def session(self, mode):
@@ -319,6 +334,8 @@ class App:
         if mode == "quiz":
             view = QuizView(self, bindings, progress)
             terminal.run(bindings, progress, save, view, forced_level=self.level)
+        elif mode == "exam":
+            practice.exam(bindings, progress, save, ExamView(self, bindings, progress))
         else:
             view = PracticeView(self, bindings, progress, mode)
             practice.run(bindings, progress, save, view, forced_level=self.level,
@@ -358,7 +375,7 @@ class App:
 class Menu:
     def __init__(self, app):
         self.app = app
-        self.rows = ["quiz", "practice", "real", "stats", "source", "level", "quit"]
+        self.rows = ["quiz", "practice", "real", "exam", "stats", "moves", "source", "level", "quit"]
         self.index = 0
         sources = [s for s in LABELS if any(b.source == s for b in app.bindings)]
         self.all_sources = sources
@@ -477,8 +494,8 @@ def draw_progress(app, top, x, mode, bindings):
     width = max(6, min(20, app.width - x - 26))
     y = top
     for source, items in quiz.by_source(bindings).items():
-        b = belt_rules.belt(items, progress)
-        unlocked = quiz.unlocked_level(items, progress)
+        b = belt_rules.belt(items, progress, uses_exams(mode))
+        unlocked = quiz.unlocked_level(items, progress, uses_exams(mode))
         app.puts(y, x, [(f"{LABELS[source]:<9}", app.fg(curses.COLOR_CYAN) | curses.A_BOLD),
                         app.belt_bar(b.name, 6), (f"  {b.name} belt", curses.A_BOLD)])
         y += 1
@@ -490,7 +507,9 @@ def draw_progress(app, top, x, mode, bindings):
             app.puts(y, x, [(f"{level} {LEVEL_NAMES[level - 1]:<10} ", attr),
                             ("█" * filled, curses.A_DIM if locked else app.fg(curses.COLOR_GREEN)),
                             ("░" * (width - filled), curses.A_DIM),
-                            (f" {learned}/{total}" + (" locked" if locked else ""), attr)])
+                            (f" {learned}/{total}" + (" locked" if locked else ""), attr),
+                            (" exam ✓" if uses_exams(mode) and prog.exam_passed(progress, source, level) else "",
+                             app.fg(curses.COLOR_GREEN))])
             y += 1
         y += 1
     return y
@@ -552,7 +571,7 @@ class SessionView:
         self.face = "ready"
         self.source = None
         self.history = deque(maxlen=40)  # (text, attr)
-        self.belts = belt_rules.belts(bindings, progress)
+        self.belts = belt_rules.belts(bindings, progress, uses_exams(mode))
         self.stats = prog.load_stats()
         self.best_combo = self.stats.get(stats_key(mode), {}).get("best_combo", 0)
         self.record_told = False
@@ -575,10 +594,13 @@ class SessionView:
 
     def check_belts(self):
         """Show the new belt screen for every source that just earned one."""
-        new = belt_rules.belts(self.bindings, self.progress)
+        new = belt_rules.belts(self.bindings, self.progress, uses_exams(self.mode))
         for source, b in new.items():
             if b.index > self.belts[source].index:
                 self.app.new_belt(source, b)
+            elif b.exam_ready and not self.belts[source].exam_ready and self.mode != "exam":
+                self.notice = (f"{LABELS[source]} exam ready! take it from the menu",
+                               self.app.fg(curses.COLOR_YELLOW) | curses.A_BOLD)
         self.belts = new
         self.app.draw = self.draw
 
@@ -794,6 +816,10 @@ class PracticeView(SessionView):
         self.waiting = None
         self.app.render()
 
+    def frame_note(self):
+        level = next(iter(self.levels.values()), 1)
+        return f"level {level} {LEVEL_NAMES[level - 1]}"
+
     def intro(self, binding, description, shown, hints, score, levels):
         """A binding you have never seen: show it, then press it once."""
         app = self.app
@@ -849,8 +875,7 @@ class PracticeView(SessionView):
             quit_keys.append("ctrl+c")
         if "omarchy" in self.levels:
             quit_keys.append("esc (Omarchy)")
-        level = next(iter(self.levels.values()), 1)
-        top, left, width, bottom = self.draw_frame(MODES[self.mode][0], f"level {level} {LEVEL_NAMES[level - 1]}",
+        top, left, width, bottom = self.draw_frame(MODES[self.mode][0], self.frame_note(),
                                                    " / ".join(quit_keys) + ": back to the menu")
         if self.waiting:
             y = self.draw_head(top, left, width, bottom, None)
@@ -938,8 +963,12 @@ class QuizView(SessionView):
         self.card = (binding, hints)
         self.history.appendleft((f"★ {binding.description}", app.fg(curses.COLOR_YELLOW)))
         app.flush_input()
-        app.render()
-        key = app.key()
+        # Only Enter goes on, so trying the shortcut does not skip the card
+        while True:
+            app.render()
+            key = app.key()
+            if key in ENTER or key in BACK:
+                break
         self.card = None
         return key not in BACK
 
@@ -966,7 +995,7 @@ class QuizView(SessionView):
         if self.answer is not None:
             hint = "any key: next question"
         if self.card:
-            hint = "any key: got it   q: back to the menu"
+            hint = "enter: got it   q: back to the menu"
         level = next(iter(self.levels.values()), 1)
         top, left, width, bottom = self.draw_frame("Quiz", f"level {level} {LEVEL_NAMES[level - 1]}", hint)
         if self.card:
@@ -1005,10 +1034,16 @@ class QuizView(SessionView):
         """A new binding: what it does, its keys and its family."""
         app = self.app
         binding, hints = self.card
-        title = [("new move  ", app.fg(curses.COLOR_YELLOW) | curses.A_BOLD),
+        title = [("new shortcut  ", app.fg(curses.COLOR_YELLOW) | curses.A_BOLD),
                  (binding.description, app.fg(curses.COLOR_CYAN) | curses.A_BOLD)]
         y = self.draw_head(top, left, width, bottom, title)
         app.center(y, self.move_chips(binding.keys), left, width)
+        y += 2
+        # In the quiz nothing catches the keys, so an Omarchy shortcut would really run
+        note = "just remember it, don't press it"
+        if binding.source == "omarchy":
+            note += ": here it would really run"
+        app.center(y, [(note, app.fg(curses.COLOR_YELLOW))], left, width)
         y += 2
         for hint in hints:
             if y >= bottom - 1:
@@ -1017,3 +1052,165 @@ class QuizView(SessionView):
                 hint = hint[:width - 3] + "…"
             app.center(y, [(hint, curses.A_DIM)], left, width)
             y += 1
+
+
+class ExamView(PracticeView):
+    """A belt exam: the practice screen with a counter, a start screen and the results."""
+
+    def __init__(self, app, bindings, progress):
+        super().__init__(app, bindings, progress, "exam")
+        self.counts = {}
+        self.asked = 0
+
+    def exam_start(self, levels, counts):
+        """Say what the exam is about. Return False to go back to the menu."""
+        app = self.app
+        self.levels, self.counts = levels, counts
+        self.has_terminal = any(b.source != "omarchy" for b in self.bindings)
+
+        def draw():
+            top = max(1, (app.height - 14) // 2)
+            app.draw_ninja(top, (app.width - ninja.WIDTH) // 2, "ready", belt_rules.best(self.belts).name)
+            app.center(top + 5, [("✦  BELT EXAM  ✦", app.accent | curses.A_BOLD)])
+            y = top + 7
+            for source, level in levels.items():
+                belt = belt_rules.BELTS[level]
+                app.center(y, [(f"{LABELS[source]:<8}", app.fg(curses.COLOR_CYAN) | curses.A_BOLD),
+                               (f"  level {level} {LEVEL_NAMES[level - 1]}  ·  {counts[source]} moves  →  ", 0),
+                               app.belt_bar(belt, 4), (f" {belt} belt", curses.A_BOLD)])
+                y += 1
+            app.center(y + 1, [("Every move once. Get them all right in under 3 s.", curses.A_DIM)])
+            app.center(y + 2, [("Each right answer counts as learned, even if you fail.", curses.A_DIM)])
+            app.center(app.height - 1, [("enter: start   q: back to the menu", curses.A_DIM)])
+        app.draw = draw
+        app.flush_input()
+        while True:
+            app.render()
+            key = app.key()
+            if key in BACK:
+                return False
+            if key in ENTER or key == " ":
+                break
+        app.draw = self.draw
+        return True
+
+    def frame_note(self):
+        return f"question {self.asked}/{sum(self.counts.values())}"
+
+    def question(self, binding, description, score, levels):
+        self.asked += 1
+        super().question(binding, description, score, levels)
+
+    def right(self, seconds, limit, fast, score):
+        super().right(seconds, limit, fast, score)
+        if not fast:
+            # Slow is not good enough in an exam
+            app = self.app
+            self.result = [(f"✗ {seconds:.1f} s", app.fg(curses.COLOR_RED) | curses.A_BOLD),
+                           (f"  right, but over {limit:.0f} s", curses.A_DIM)]
+            self.history[0] = (f"✗ {seconds:4.1f}  {self.description}", app.fg(curses.COLOR_RED))
+            self.face = "sad"
+            app.render()
+
+    def exam_finish(self, results, levels):
+        app = self.app
+        self.check_belts()  # a passed exam shows the new belt first
+        passed_all = all(passed for passed, _, _ in results.values())
+        app.flush_input()
+
+        def draw():
+            top = max(1, (app.height - 12) // 2)
+            app.draw_ninja(top, (app.width - ninja.WIDTH) // 2, "cheer" if passed_all else "calm",
+                           belt_rules.best(self.belts).name)
+            app.center(top + 5, [("Exam over", curses.A_BOLD)])
+            y = top + 7
+            for source, (passed, right, total) in results.items():
+                verdict = ("passed", app.fg(curses.COLOR_GREEN) | curses.A_BOLD) if passed \
+                    else ("not passed", app.fg(curses.COLOR_RED) | curses.A_BOLD)
+                app.center(y, [(f"{LABELS[source]:<8}", app.fg(curses.COLOR_CYAN) | curses.A_BOLD),
+                               (f"  level {levels[source]}  {right}/{total}  ", 0), verdict])
+                y += 1
+            if not passed_all:
+                app.center(y + 1, [("The ones you got right now count as learned.", curses.A_DIM)])
+            app.center(app.height - 1, [("any key: back to the menu", curses.A_DIM)])
+        app.draw = draw
+        app.render()
+        app.key()
+
+
+class Moves:
+    """Every shortcut by source and level, with what you already learned."""
+
+    def __init__(self, app):
+        self.app = app
+        self.by_source = quiz.moves_by_level(app.bindings)
+        self.sources = list(self.by_source)
+        self.source = app.source if app.source in self.sources else (self.sources or [None])[0]
+        self.level = 1
+        self.top = 0
+        self.progress = {mode: prog.load(progress_path(mode)) for mode in ("quiz", "practice")}
+
+    def items(self):
+        return self.by_source.get(self.source, {}).get(self.level, [])
+
+    def rows_shown(self):
+        return max(1, self.app.height - 7)
+
+    def show(self):
+        app = self.app
+        app.draw = self.draw
+        while True:
+            app.render()
+            key = app.key()
+            if key in BACK or key in ENTER:
+                return
+            last_top = max(0, len(self.items()) - self.rows_shown())
+            if key in LEFT + RIGHT:
+                self.level = (self.level - 1 + (1 if key in RIGHT else -1)) % LAST_LEVEL + 1
+                self.top = 0
+            elif key == "Tab" and self.sources:
+                self.source = self.sources[(self.sources.index(self.source) + 1) % len(self.sources)]
+                self.top = 0
+            elif key in DOWN:
+                self.top = min(last_top, self.top + 1)
+            elif key in UP:
+                self.top = max(0, self.top - 1)
+            elif key == " ":
+                self.top = min(last_top, self.top + self.rows_shown())
+
+    def draw(self):
+        app = self.app
+        app.put(0, 2, "Moves", app.accent | curses.A_BOLD)
+        x = 2
+        for source in self.sources:
+            on = source == self.source
+            attr = (app.accent | curses.A_BOLD | curses.A_REVERSE) if on else curses.A_DIM
+            x = app.put(2, x, f" {LABELS[source]} ", attr) + 1
+        x = 2
+        for level, name in enumerate(LEVEL_NAMES, start=1):
+            count = len(self.by_source.get(self.source, {}).get(level, []))
+            on = level == self.level
+            attr = (app.fg(curses.COLOR_CYAN) | curses.A_BOLD) if on else curses.A_DIM
+            x = app.put(3, x, f"{'▸' if on else ' '} {level} {name} ({count})", attr) + 2
+
+        items = self.items()
+        width = min(32, max((len(" or ".join(b.keys)) for b in items), default=0))
+        app.put(5, 2, f"Q P  {'keys':<{width}}  action", curses.A_DIM)
+        for i, b in enumerate(items[self.top:self.top + self.rows_shown()]):
+            marks = [("✓" if prog.is_passed(self.progress[mode], b) else "·",
+                      app.fg(curses.COLOR_GREEN) if prog.is_passed(self.progress[mode], b) else curses.A_DIM)
+                     for mode in ("quiz", "practice")]
+            combo = " or ".join(b.keys)
+            if len(combo) > width:
+                combo = combo[:width - 1] + "…"
+            app.puts(6 + i, 2, [marks[0], (" ", 0), marks[1], ("  ", 0),
+                                (f"{combo:<{width}}", app.fg(curses.COLOR_CYAN)), ("  ", 0),
+                                (b.description, 0)])
+        if len(items) > self.rows_shown():
+            end = min(len(items), self.top + self.rows_shown())
+            app.put(app.height - 1, app.width - 14, f"{self.top + 1}-{end}/{len(items)}", curses.A_DIM)
+        app.puts(app.height - 1, 2, [("←→", app.accent), (" level   ", curses.A_DIM),
+                                     ("tab", app.accent), (" source   ", curses.A_DIM),
+                                     ("↑↓", app.accent), (" scroll   ", curses.A_DIM),
+                                     ("q", app.accent), (" back   ", curses.A_DIM),
+                                     ("✓ learned in Q quiz / P practice", curses.A_DIM)])

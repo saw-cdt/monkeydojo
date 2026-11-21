@@ -32,6 +32,27 @@ def is_passed(progress, binding):
     return progress.get(binding.id, {}).get("passed", False) or is_learned(progress, binding)
 
 
+def learn_now(progress, binding):
+    """A fast right answer in an exam: the binding counts as learned at once."""
+    record_answer(progress, binding, True)
+    entry = progress[binding.id]
+    entry["box"] = max(entry["box"], LEARNED_BOX)
+    entry["passed"] = True
+
+
+# Belt exams are kept next to the bindings, as "exam:<source>:<level>"
+def _exam_key(source, level):
+    return f"exam:{source}:{level}"
+
+
+def exam_passed(progress, source, level):
+    return progress.get(_exam_key(source, level), {}).get("passed", False)
+
+
+def pass_exam(progress, source, level):
+    progress[_exam_key(source, level)] = {"passed": True}
+
+
 def record_answer(progress, binding, is_correct, fast=True):
     """A right but slow answer counts as correct without moving up a box."""
     entry = progress.setdefault(binding.id, {"box": 0, "seen": 0, "correct": 0})

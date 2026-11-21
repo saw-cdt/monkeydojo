@@ -23,6 +23,9 @@ def parse_args(argv=None):
                         help="practice Omarchy shortcuts and see them happen")
     parser.add_argument("--plain", action="store_true",
                         help="line by line interface instead of the full screen one")
+    parser.add_argument("--exam", action="store_true",
+                        help="take the belt exam of your current level (practice progress)")
+    parser.add_argument("--moves", action="store_true", help="list every shortcut by level and exit")
     parser.add_argument("--stats", action="store_true", help="show your progress and exit")
     parser.add_argument("--reset", action="store_true", help="delete your progress and exit")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -32,7 +35,7 @@ def parse_args(argv=None):
 def main(argv=None):
     args = parse_args(argv)
     # With no mode chosen, open the menu (the full screen interface)
-    if not (args.plain or args.practice or args.real or args.stats or args.reset) \
+    if not (args.plain or args.practice or args.real or args.exam or args.moves or args.stats or args.reset) \
             and sys.stdin.isatty() and sys.stdout.isatty():
         from monkeydojo.ui import tui
         tui.main(args.source, args.level)
@@ -41,6 +44,8 @@ def main(argv=None):
         if args.source == "lazyvim":
             sys.exit("Real mode is for Omarchy shortcuts only.")
         args.practice, args.source = True, "omarchy"
+    if args.exam:
+        args.practice = True
 
     path = prog.PRACTICE_PATH if args.practice else prog.DEFAULT_PATH
 
@@ -67,8 +72,12 @@ def main(argv=None):
 
     progress = prog.load(path)
 
+    if args.moves:
+        terminal.show_moves(bindings, progress)
+        return
+
     if args.stats:
-        terminal.show_stats(bindings, progress)
+        terminal.show_stats(bindings, progress, exams=args.practice)
         return
 
     def save(progress):
@@ -77,6 +86,10 @@ def main(argv=None):
     if args.practice:
         if not sys.stdin.isatty():
             sys.exit("Practice mode needs an interactive terminal.")
+        if args.exam:
+            if not practice.exam(bindings, progress, save=save):
+                print("Every exam is passed. Nothing left to examine.")
+            return
         practice.run(bindings, progress, save=save, forced_level=args.level, real_mode=args.real)
     else:
         terminal.run(bindings, progress, save=save, forced_level=args.level)
