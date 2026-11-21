@@ -39,7 +39,7 @@ class Belt:
 def belt(bindings, progress):
     """Belt for the bindings of one source."""
     level = quiz.unlocked_level(bindings, progress)
-    learned, total = quiz.level_stats(bindings, progress, level)
+    learned, total = quiz.passed_stats(bindings, progress, level)
     needed = math.ceil(quiz.UNLOCK_RATIO * total)
     if level == LAST_LEVEL and learned >= needed:
         return Belt(len(BELTS) - 1, learned, 0)

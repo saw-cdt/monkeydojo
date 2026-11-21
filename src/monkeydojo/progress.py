@@ -27,6 +27,11 @@ def is_learned(progress, binding):
     return box(progress, binding) >= LEARNED_BOX
 
 
+def is_passed(progress, binding):
+    """Learned at some point. A later mistake does not undo it, so levels never lock again."""
+    return progress.get(binding.id, {}).get("passed", False) or is_learned(progress, binding)
+
+
 def record_answer(progress, binding, is_correct, fast=True):
     """A right but slow answer counts as correct without moving up a box."""
     entry = progress.setdefault(binding.id, {"box": 0, "seen": 0, "correct": 0})
@@ -35,6 +40,8 @@ def record_answer(progress, binding, is_correct, fast=True):
         entry["correct"] += 1
         if fast:
             entry["box"] = min(entry["box"] + 1, MAX_BOX)
+            if entry["box"] >= LEARNED_BOX:
+                entry["passed"] = True
     else:
         entry["box"] = 0
 

@@ -19,13 +19,13 @@ def learn(bindings, level_items):
 
 def test_new_user_has_a_white_belt_with_no_stripes():
     b = belts.belt(make_bindings(), {})
-    assert (b.name, b.next_name, b.learned, b.needed, b.stripes) == ("white", "yellow", 0, 8, 0)
+    assert (b.name, b.next_name, b.learned, b.needed, b.stripes) == ("white", "yellow", 0, 10, 0)
 
 
 def test_stripes_fill_on_the_way_to_the_next_belt():
     bindings = make_bindings()
     b = belts.belt(bindings, learn(bindings, bindings[:4]))
-    assert (b.learned, b.needed, b.stripes) == (4, 8, 2)
+    assert (b.learned, b.needed, b.stripes) == (4, 10, 2)
 
 
 def test_each_level_is_a_belt_and_learning_the_last_one_is_red():

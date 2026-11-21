@@ -1,5 +1,6 @@
 import random
 
+from monkeydojo import progress as prog
 from monkeydojo import quiz
 from monkeydojo.levels import LEVELS
 from monkeydojo.models import Binding
@@ -34,12 +35,23 @@ def test_every_question_has_exactly_one_right_answer():
         assert right == [q.options[q.correct_index]]
 
 
-def test_level_2_unlocks_at_80_percent():
+def test_level_2_unlocks_only_when_every_binding_is_learned():
     bindings = make_bindings()
     total = len(LEVELS["omarchy"][0])
-    needed = int(total * quiz.UNLOCK_RATIO)
-    assert quiz.unlocked_level(bindings, learned(bindings, needed - 1)) == 1
-    assert quiz.unlocked_level(bindings, learned(bindings, needed)) == 2
+    assert quiz.unlocked_level(bindings, learned(bindings, total - 1)) == 1
+    assert quiz.unlocked_level(bindings, learned(bindings, total)) == 2
+
+
+def test_a_mistake_on_an_old_binding_does_not_lock_the_level_again():
+    bindings = make_bindings()
+    total = len(LEVELS["omarchy"][0])
+    progress = {}
+    for b in bindings[:total]:
+        for _ in range(prog.LEARNED_BOX):
+            prog.record_answer(progress, b, True)
+    assert quiz.unlocked_level(bindings, progress) == 2
+    prog.record_answer(progress, bindings[0], False)
+    assert quiz.unlocked_level(bindings, progress) == 2
 
 
 def test_pool_includes_earlier_levels():

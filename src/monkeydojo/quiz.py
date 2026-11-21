@@ -6,7 +6,8 @@ from monkeydojo import progress as prog
 from monkeydojo.levels import LAST_LEVEL, level_of
 from monkeydojo.models import Question
 
-UNLOCK_RATIO = 0.8
+# Every binding of a level has to be learned before the next one opens
+UNLOCK_RATIO = 1.0
 
 
 def by_source(bindings):
@@ -23,11 +24,18 @@ def level_stats(bindings, progress, level):
     return learned, len(items)
 
 
+def passed_stats(bindings, progress, level):
+    """Return (passed, total) for a level. Passed bindings stay passed after a mistake."""
+    items = [b for b in bindings if level_of(b) == level]
+    passed = sum(1 for b in items if prog.is_passed(progress, b))
+    return passed, len(items)
+
+
 def unlocked_level(bindings, progress):
     """Highest level the user can practice. Pass bindings from a single source."""
     for level in range(1, LAST_LEVEL):
-        learned, total = level_stats(bindings, progress, level)
-        if learned < UNLOCK_RATIO * total:
+        passed, total = passed_stats(bindings, progress, level)
+        if passed < UNLOCK_RATIO * total:
             return level
     return LAST_LEVEL
 
