@@ -31,6 +31,7 @@ class FakeQuizView:
     def __init__(self, answers):
         self.answers = answers
         self.finished = None
+        self.intros = 0
 
     def start(self, levels):
         pass
@@ -41,7 +42,11 @@ class FakeQuizView:
         right = self.answers.pop(0)
         return question.correct_index if right else (question.correct_index + 1) % 4
 
-    def result(self, question, answer, score):
+    def intro(self, binding, hints, levels):
+        self.intros += 1
+        return True
+
+    def result(self, question, answer, score, mistake=None):
         pass
 
     def unlocked(self, source, level):
@@ -58,5 +63,6 @@ def test_quiz_loop_works_with_any_view():
     score = terminal.run(bindings, progress, saves.append, view)
     assert view.finished is score
     assert (score.total, score.correct) == (3, 2)
-    assert len(saves) == 3
+    assert len(saves) == 3 + view.intros
+    assert view.intros >= 1  # new bindings are shown before they are asked
     assert sum(e["seen"] for e in progress.values()) == 3

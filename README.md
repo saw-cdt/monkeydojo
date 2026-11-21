@@ -193,8 +193,30 @@ listed in [docs/real-mode.md](docs/real-mode.md).
 | 2     | Daily use  | Menus, clipboard, screen capture, scratchpad, groups |
 | 3     | Advanced   | Everything else                                      |
 
-You start at level 1. The next level unlocks when you have learned 80% of the
-current one. Omarchy and LazyVim level up independently. Earlier levels keep showing up so you don't forget them.
+You start at level 1. The next level unlocks when you have learned every binding
+of the current one. Once a binding is learned, a later mistake does not lock the
+level again. Omarchy and LazyVim level up independently. Earlier levels keep
+showing up so you don't forget them.
+
+### New moves
+
+A binding is never asked before you have seen it. The first time it comes up you
+get a *new move* card with its keys; in practice and real mode you press it once,
+without a score, before it joins the questions. New moves come a few at a time:
+the next one only shows up while fewer than 3 of the ones you have seen are
+still below box 2.
+
+The card also shows the binding's family, so you learn the pattern instead of
+each key on its own:
+
+```
+SUPER SHIFT + arrows: Swap window down, Swap window to the left, …
+SUPER + LEFT is Focus on left window
+Space g … is a group: Git Blame Line, Git Status
+```
+
+A wrong answer tells what your answer really does: the option you chose in the
+quiz, or the shortcut you pressed in practice.
 
 ### Spaced repetition
 
@@ -241,6 +263,7 @@ src/monkeydojo/
 │   └── lazyvim_dump.lua
 ├── levels.py       # which binding belongs to which level
 ├── quiz.py         # question logic, no I/O
+├── learn.py        # new moves, family hints, what a wrong answer does
 ├── progress.py     # Leitner boxes, the progress file and the best combos
 ├── belts.py        # which belt a source is at, from its levels
 ├── score.py        # score of one session (combo, average time)
@@ -253,7 +276,7 @@ src/monkeydojo/
     └── keyreader.py # reads raw keypresses from the terminal
 ```
 
-The core (`quiz.py`, `progress.py`, `levels.py`, `keys.py`, `score.py`, `belts.py`) never prints, reads input or
+The core (`quiz.py`, `learn.py`, `progress.py`, `levels.py`, `keys.py`, `score.py`, `belts.py`) never prints, reads input or
 runs commands. Sources turn external data into `Binding` objects, and UIs show
 questions to the user. The quiz and practice loops take a *view* object that
 does all the showing, so the line by line interface and the TUI share the same

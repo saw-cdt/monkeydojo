@@ -107,7 +107,7 @@ def test_judge_hyprland_events():
     assert judge(["mod", "wrong"], wanted) is None                 # SUPER alone
     assert judge(["wrong", "mod"], wanted) is None                 # either order
     assert judge(["key 7", "wrong"], wanted) == ("ok", 7)          # right shortcut + catchall
-    assert judge(["key 3", "wrong"], wanted) == ("wrong", None)    # another Omarchy shortcut
+    assert judge(["key 3", "wrong"], wanted) == ("wrong", 3)       # another Omarchy shortcut
     assert judge(["wrong"], wanted) == ("wrong", None)             # any other key
     assert judge(["mod", "wrong", "wrong"], wanted) == ("wrong", None)  # SUPER then E, very fast
     assert judge(["quit", "wrong"], wanted) == ("quit", None)

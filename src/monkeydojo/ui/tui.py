@@ -599,6 +599,16 @@ class SessionView:
             self.face = "cheer"
             self.notice = (f"new best combo! ×{s.streak}", app.fg(curses.COLOR_YELLOW) | curses.A_BOLD)
 
+    def move_chips(self, shown):
+        parts = []
+        for i, combo in enumerate(shown):
+            if i:
+                parts.append(("  or  ", curses.A_DIM))
+            # An Omarchy shortcut is one chord; a LazyVim one can be a sequence of keys
+            tokens = [combo] if self.source == "omarchy" else keys.split_keys(combo)
+            parts += self.app.chips(tokens, curses.COLOR_GREEN)
+        return parts
+
     def belt_of(self, source):
         return self.belts.get(source) or belt_rules.Belt(0, 0, 0)
 
@@ -753,6 +763,9 @@ class PracticeView(SessionView):
         self.result = None   # parts under the typed keys
         self.drilling = False
         self.drill_from = 0
+        self.introducing = False
+        self.hints = []
+        self.mistake = None
         self.has_terminal = False
         self.waiting = "Getting ready..."
 
@@ -775,8 +788,23 @@ class PracticeView(SessionView):
         self.result = None
         self.drilling = False
         self.drill_from = 0
+        self.introducing = False
+        self.hints = []
+        self.mistake = None
         self.waiting = None
         self.app.render()
+
+    def intro(self, binding, description, shown, hints, score, levels):
+        """A binding you have never seen: show it, then press it once."""
+        app = self.app
+        self.question(binding, description, score, levels)
+        self.introducing = True
+        self.hints = hints
+        self.face = "calm"
+        self.notice = None
+        self.result = [("new move  ", app.fg(curses.COLOR_YELLOW) | curses.A_BOLD), *self.move_chips(shown)]
+        self.history.appendleft((f"★       {description}", app.fg(curses.COLOR_YELLOW)))
+        app.render()
 
     def key(self, name):
         self.typed.append(name)
@@ -795,15 +823,10 @@ class PracticeView(SessionView):
         self.after_answer(True)
         app.render()
 
-    def wrong(self, shown, score):
+    def wrong(self, shown, score, mistake=None):
         app = self.app
-        self.result = [("✗ the move is  ", app.fg(curses.COLOR_RED))]
-        for i, combo in enumerate(shown):
-            if i:
-                self.result.append(("  or  ", curses.A_DIM))
-            # An Omarchy shortcut is one chord; a LazyVim one can be a sequence of keys
-            tokens = [combo] if self.source == "omarchy" else keys.split_keys(combo)
-            self.result += app.chips(tokens, curses.COLOR_GREEN)
+        self.result = [("✗ the move is  ", app.fg(curses.COLOR_RED)), *self.move_chips(shown)]
+        self.mistake = mistake
         self.history.appendleft((f"✗       {self.description}", app.fg(curses.COLOR_RED)))
         self.notice = None
         self.after_answer(False)
@@ -839,14 +862,33 @@ class PracticeView(SessionView):
         if self.result:
             typed_color = curses.COLOR_RED if self.face == "sad" else curses.COLOR_GREEN
         roomy = bottom - top >= 14
-        app.center(y, app.chips(first, typed_color) if first else [("…", curses.A_DIM)], left, width)
-        y += 2 if roomy else 1
-        if self.result:
+        if self.introducing:
             app.center(y, self.result, left, width)
             y += 2 if roomy else 1
+            # Hints only where they fit; the line to press it on matters more
+            for hint in self.hints:
+                if y >= bottom - (2 if roomy else 1):
+                    break
+                if len(hint) > width - 2:
+                    hint = hint[:width - 3] + "…"
+                app.center(y, [(hint, curses.A_DIM)], left, width)
+                y += 1
+            y += 1 if roomy and self.hints else 0
+        else:
+            app.center(y, app.chips(first, typed_color) if first else [("…", curses.A_DIM)], left, width)
+            y += 2 if roomy else 1
+            if self.result:
+                app.center(y, self.result, left, width)
+                y += 1
+                if self.mistake and y < bottom - 1:
+                    text = f"you pressed: {self.mistake}"
+                    app.center(y, [(text[:width - 2], curses.A_DIM)], left, width)
+                    y += 1
+                y += 1 if roomy else 0
         if self.drilling:
             again = self.typed[self.drill_from:]
-            app.center(y, [("again: ", app.fg(curses.COLOR_YELLOW)), *app.chips(again, curses.COLOR_WHITE),
+            label = "press it: " if self.introducing else "again: "
+            app.center(y, [(label, app.fg(curses.COLOR_YELLOW)), *app.chips(again, curses.COLOR_WHITE),
                            (" █", 0)], left, width)
         if bottom - y > 3:
             self.draw_belt_row(bottom - 1, left, width)
@@ -858,6 +900,8 @@ class QuizView(SessionView):
         self.current = None
         self.selected = 0
         self.answer = None
+        self.card = None     # (binding, hints) while a new binding is shown
+        self.mistake = None
 
     def start(self, levels):
         self.levels = levels
@@ -868,7 +912,7 @@ class QuizView(SessionView):
         self.check_belts()
         self.current, self.levels = question, levels
         self.source = question.binding.source
-        self.selected, self.answer = 0, None
+        self.selected, self.answer, self.mistake = 0, None, None
         app = self.app
         while True:
             app.render()
@@ -884,8 +928,24 @@ class QuizView(SessionView):
             elif key.isdigit() and 1 <= int(key) <= len(question.options):
                 return int(key) - 1
 
-    def result(self, question, answer, score):
+    def intro(self, binding, hints, levels):
+        """A binding you have never seen, before it is asked. Return False to quit."""
         app = self.app
+        self.check_belts()
+        self.current, self.levels = None, levels
+        self.source = binding.source
+        self.face, self.notice = "calm", None
+        self.card = (binding, hints)
+        self.history.appendleft((f"★ {binding.description}", app.fg(curses.COLOR_YELLOW)))
+        app.flush_input()
+        app.render()
+        key = app.key()
+        self.card = None
+        return key not in BACK
+
+    def result(self, question, answer, score, mistake=None):
+        app = self.app
+        self.mistake = mistake
         correct = question.options[question.correct_index]
         self.notice = None
         ok = answer == question.correct_index
@@ -905,8 +965,13 @@ class QuizView(SessionView):
         hint = "1-4 or ↑↓ enter: answer   q: back to the menu"
         if self.answer is not None:
             hint = "any key: next question"
+        if self.card:
+            hint = "any key: got it   q: back to the menu"
         level = next(iter(self.levels.values()), 1)
         top, left, width, bottom = self.draw_frame("Quiz", f"level {level} {LEVEL_NAMES[level - 1]}", hint)
+        if self.card:
+            self.draw_card(top, left, width, bottom)
+            return
         q = self.current
         if not q:
             self.draw_head(top, left, width, bottom, None)
@@ -931,5 +996,24 @@ class QuizView(SessionView):
                 attr = app.accent | curses.A_BOLD
             marker = "▸" if i == self.selected and self.answer is None else " "
             app.put(y + i, x, f"{marker} {i + 1}) {option}", attr)
+        if self.mistake and y + len(q.options) + 1 < bottom:
+            app.center(y + len(q.options) + 1, [(self.mistake[:width - 2], curses.A_DIM)], left, width)
         if bottom - (y + len(q.options)) > 3:
             self.draw_belt_row(bottom - 1, left, width)
+
+    def draw_card(self, top, left, width, bottom):
+        """A new binding: what it does, its keys and its family."""
+        app = self.app
+        binding, hints = self.card
+        title = [("new move  ", app.fg(curses.COLOR_YELLOW) | curses.A_BOLD),
+                 (binding.description, app.fg(curses.COLOR_CYAN) | curses.A_BOLD)]
+        y = self.draw_head(top, left, width, bottom, title)
+        app.center(y, self.move_chips(binding.keys), left, width)
+        y += 2
+        for hint in hints:
+            if y >= bottom - 1:
+                break
+            if len(hint) > width - 2:
+                hint = hint[:width - 3] + "…"
+            app.center(y, [(hint, curses.A_DIM)], left, width)
+            y += 1

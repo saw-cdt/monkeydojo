@@ -137,7 +137,7 @@ class Trap:
         """Wait for one answer to a question whose right shortcuts are `targets`.
 
         Return (verdict, combo, seconds): verdict is 'ok', 'wrong', 'quit' or
-        'timeout', and combo is the right shortcut that was pressed.
+        'timeout', and combo is the shortcut that was pressed, if it is one we know.
         """
         wanted = {self.index[t] for t in targets}
         self._drain()
@@ -194,7 +194,8 @@ class Trap:
 def judge(events, wanted):
     """Decide what a group of events from one moment means.
 
-    Return ('ok', index), ('quit', None), ('wrong', None) or None to keep waiting.
+    Return ('ok', index), ('quit', None), ('wrong', index or None) or None to keep
+    waiting. A wrong index is the known shortcut that was pressed instead.
     Every press sends 'wrong' (catchall) plus its own event if it has one, so a
     lone modifier ('mod' + 'wrong') is not a mistake.
     """
@@ -204,7 +205,9 @@ def judge(events, wanted):
             return "ok", index
     if "quit" in events:
         return "quit", None
-    if pressed or events.count("wrong") > events.count("mod"):
+    if pressed:
+        return "wrong", pressed[0]
+    if events.count("wrong") > events.count("mod"):
         return "wrong", None
     return None
 

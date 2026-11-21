@@ -12,7 +12,7 @@ import sys
 import time
 from contextlib import ExitStack
 
-from monkeydojo import hyprland, keys, real
+from monkeydojo import hyprland, keys, learn, real
 from monkeydojo import progress as prog
 from monkeydojo import quiz
 from monkeydojo.score import Score
@@ -38,7 +38,7 @@ def practicable(bindings, hyprland_ok):
 
 
 def read_sequence(view, fd, sequences):
-    """Echo keys until they match a sequence or go wrong. Return (ok, seconds)."""
+    """Echo keys until they match a sequence or go wrong. Return (ok, seconds, typed)."""
     keyreader.discard_pending(fd)
     typed = []
     start = time.monotonic()
@@ -50,7 +50,7 @@ def read_sequence(view, fd, sequences):
             view.key(key)
             state = keys.check(typed, sequences)
             if state != "partial":
-                return state == "correct", time.monotonic() - start
+                return state == "correct", time.monotonic() - start, typed
 
 
 def omarchy_combos(bindings):
@@ -66,7 +66,7 @@ def omarchy_combos(bindings):
 
 
 def catch_shortcut(view, trap, combos):
-    """Wait for a shortcut in the Hyprland submap. Return (ok, seconds)."""
+    """Wait for a shortcut in the Hyprland submap. Return (ok, seconds, combo pressed or None)."""
     by_bind = {hyprland.to_bind_keys(c): c for c in combos}
     verdict, pressed, seconds = trap.ask(list(by_bind), HYPRLAND_TIMEOUT)
     if verdict == "quit":
@@ -75,7 +75,7 @@ def catch_shortcut(view, trap, combos):
         view.timeout()
     if verdict == "ok":
         view.key(by_bind[pressed])
-    return verdict == "ok", seconds
+    return verdict == "ok", seconds, pressed
 
 
 def run(bindings, progress, save, view=None, forced_level=None, real_mode=False, rng=random):
@@ -105,7 +105,8 @@ def run(bindings, progress, save, view=None, forced_level=None, real_mode=False,
         trap = stack.enter_context(hyprland.Trap(omarchy_combos(bindings))) if has_omarchy else None
         try:
             while True:
-                binding = quiz.pick(pool, progress, last)
+                new = learn.next_new(pool, progress)
+                binding = new or quiz.pick(learn.known(pool, progress), progress, last)
                 last = binding
                 # In real mode, switching to the workspace you are on would show nothing
                 exclude = {real.current_workspace()} if real_mode and keys.NUMBER in binding.description else ()
@@ -124,8 +125,18 @@ def run(bindings, progress, save, view=None, forced_level=None, real_mode=False,
                     shown = [" ".join(s) for s in sequences]
                     length = min(len(s) for s in sequences)
 
+                if new:
+                    # First time: show the move and press it once, without a score
+                    view.intro(binding, description, shown, learn.hints(binding, pool), score, levels)
+                    drill(view, ask)
+                    if real_mode:
+                        real.show(binding, n, sandbox)
+                    learn.introduce(progress, binding)
+                    save(progress)
+                    continue
+
                 view.question(binding, description, score, levels)
-                ok, seconds = ask()
+                ok, seconds, pressed = ask()
 
                 fast = False
                 if ok:
@@ -135,7 +146,8 @@ def run(bindings, progress, save, view=None, forced_level=None, real_mode=False,
                     view.right(seconds, limit, fast, score)
                 else:
                     score.add(False)
-                    view.wrong(shown, score)
+                    mistake = learn.meaning(bindings, binding.source, pressed) if pressed else None
+                    view.wrong(shown, score, mistake)
                     drill(view, ask)
                 if real_mode:
                     real.show(binding, n, sandbox)
@@ -160,7 +172,7 @@ def drill(view, ask):
     """After a mistake, press the right shortcut once so the fingers learn it."""
     while True:
         view.drill_prompt()
-        ok, _ = ask()
+        ok, *_ = ask()
         view.drill_result(ok)
         if ok:
             return
@@ -215,8 +227,16 @@ class PlainView:
         else:
             print(f" {YELLOW}✓ {seconds:.1f} s, slow (aim for {limit:.1f} s){RESET}\n")
 
-    def wrong(self, shown, score):
+    def intro(self, binding, description, shown, hints, score, levels):
+        print(f"{DIM}[{LABELS[binding.source]}]{RESET} {YELLOW}New move:{RESET} {BOLD}{description}{RESET}"
+              f" is {' or '.join(shown)}")
+        for hint in hints:
+            print(f"  {DIM}{hint}{RESET}")
+
+    def wrong(self, shown, score, mistake=None):
         print(f" {RED}✗ It was: {' or '.join(shown)}{RESET}")
+        if mistake:
+            print(f"  {DIM}what you pressed is: {mistake}{RESET}")
 
     def drill_prompt(self):
         print(f"  {DIM}now press it:{RESET} ", end="", flush=True)

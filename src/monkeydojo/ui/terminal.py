@@ -1,7 +1,7 @@
 """Plain terminal interface: print and input."""
 
+from monkeydojo import learn, quiz
 from monkeydojo import progress as prog
-from monkeydojo import quiz
 from monkeydojo.levels import LEVEL_NAMES
 from monkeydojo.score import Score
 from monkeydojo.sources import LABELS
@@ -46,7 +46,15 @@ def run(bindings, progress, save, view=None, forced_level=None):
     score = Score()
     last = None
     while True:
-        binding = quiz.pick(pool, progress, last)
+        new = learn.next_new(pool, progress)
+        if new:
+            # First time: show the binding before asking about it
+            if not view.intro(new, learn.hints(new, pool), levels):
+                break
+            learn.introduce(progress, new)
+            save(progress)
+            continue
+        binding = quiz.pick(learn.known(pool, progress), progress, last)
         last = binding
         question = quiz.make_question(bindings, binding)
         answer = view.choose(question, score, levels)
@@ -55,7 +63,8 @@ def run(bindings, progress, save, view=None, forced_level=None):
 
         is_correct = answer == question.correct_index
         score.add(is_correct)
-        view.result(question, answer, score)
+        mistake = None if is_correct else learn.explain_choice(bindings, question, answer)
+        view.result(question, answer, score, mistake)
 
         prog.record_answer(progress, binding, is_correct)
         save(progress)
@@ -98,11 +107,28 @@ class PlainView:
                 return int(answer) - 1
             print(f"Please type a number from 1 to {len(valid)}.")
 
-    def result(self, question, answer, score):
+    def intro(self, binding, hints, levels):
+        """Show a new binding. Return False to quit."""
+        print(f"{DIM}[{LABELS[binding.source]}]{RESET} {YELLOW}New:{RESET} {BOLD}{' or '.join(binding.keys)}{RESET}"
+              f" is {BOLD}{binding.description}{RESET}")
+        for hint in hints:
+            print(f"  {DIM}{hint}{RESET}")
+        try:
+            answer = input(f"{DIM}Enter to continue, q to quit{RESET} ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return False
+        print()
+        return answer not in ("q", "quit", "exit")
+
+    def result(self, question, answer, score, mistake=None):
         if answer == question.correct_index:
             print(f"{GREEN}Correct!{RESET}\n")
         else:
-            print(f"{RED}Wrong. It was: {question.options[question.correct_index]}{RESET}\n")
+            print(f"{RED}Wrong. It was: {question.options[question.correct_index]}{RESET}")
+            if mistake:
+                print(f"{DIM}{mistake}{RESET}")
+            print()
 
     def unlocked(self, source, level):
         print(f"{YELLOW}{LABELS[source]} {format_level(level)} unlocked!{RESET}\n")
