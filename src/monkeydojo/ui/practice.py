@@ -7,6 +7,7 @@ terminal (Hyprland handles SUPER), so they are caught with a Hyprland submap.
 """
 
 import random
+import select
 import signal
 import sys
 import time
@@ -203,12 +204,14 @@ def exam(bindings, progress, save, view=None, rng=random, block=()):
     rng.shuffle(questions)
     levels = {source: level for source, (level, _) in plan.items()}
     right = dict.fromkeys(plan, 0)
-    if view.exam_start(levels, {source: len(items) for source, (_, items) in plan.items()}) is False:
-        return {}
+    counts = {source: len(items) for source, (_, items) in plan.items()}
 
     score = Score()
-    # Every shortcut of these sources can be caught, so a wrong one can be named
+    # Every shortcut of these sources can be caught, so a wrong one can be named.
+    # The start and result screens are inside too, so no shortcut runs at any point.
     with keyboard(view, [b for b in bindings if b.source in plan], block=block) as (trap, _):
+        if view.exam_start(levels, counts) is False:
+            return {}
         try:
             for binding in questions:
                 description, ask, shown, length, _ = prepare(view, trap, binding, rng)
@@ -222,20 +225,33 @@ def exam(bindings, progress, save, view=None, rng=random, block=()):
                         mistake = learn.meaning(bindings, binding.source, pressed) if pressed else None
                         view.wrong(shown, score, mistake)
                     prog.record_answer(progress, binding, ok, fast)
-                    time.sleep(EXAM_PAUSE)  # time to read the right answer
+                    save(progress)
+                    pause(EXAM_PAUSE)  # time to read the right answer
                 save(progress)
         except (Quit, KeyboardInterrupt):
             pass
 
-    results = {}
-    for source, (level, items) in plan.items():
-        passed = right[source] == len(items)
-        if passed:
-            prog.pass_exam(progress, source, level)
-        results[source] = (passed, right[source], len(items))
-    save(progress)
-    view.exam_finish(results, levels)
+        results = {}
+        for source, (level, items) in plan.items():
+            passed = right[source] == len(items)
+            if passed:
+                prog.pass_exam(progress, source, level)
+            results[source] = (passed, right[source], len(items))
+        save(progress)
+        view.exam_finish(results, levels)
     return results
+
+
+def pause(seconds):
+    """Wait a moment, but stop at once on Ctrl + C or Esc instead of losing the key."""
+    if seconds <= 0:
+        return
+    fd = sys.stdin.fileno()
+    end = time.monotonic() + seconds
+    while (left := end - time.monotonic()) > 0:
+        ready, _, _ = select.select([fd], [], [], left)
+        if ready and any(k in (keys.QUIT, "Esc") for k in keyreader.read_keys(fd)):
+            raise Quit
 
 
 def drill(view, ask):

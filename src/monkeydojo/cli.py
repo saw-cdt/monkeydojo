@@ -27,7 +27,7 @@ def parse_args(argv=None):
                         help="take the belt exam of your current level (practice progress)")
     parser.add_argument("--moves", action="store_true", help="list every shortcut by level and exit")
     parser.add_argument("--stats", action="store_true", help="show your progress and exit")
-    parser.add_argument("--reset", action="store_true", help="delete your progress and exit")
+    parser.add_argument("--reset", action="store_true", help="delete your progress and best combos, and exit")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return parser.parse_args(argv)
 
@@ -51,6 +51,8 @@ def main(argv=None):
 
     if args.reset:
         prog.reset(path)
+        # Real mode and exams share the practice progress, so their records go with it
+        prog.reset_stats(("practice", "real", "exam") if args.practice else ("quiz",))
         print("Practice progress reset." if args.practice else "Progress reset.")
         return
 

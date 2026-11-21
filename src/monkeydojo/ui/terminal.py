@@ -32,7 +32,7 @@ def show_stats(bindings, progress, exams=False):
         print(f"{BOLD}{LABELS[source]}{RESET}")
         unlocked = quiz.unlocked_level(items, progress, exams)
         for level, name in enumerate(LEVEL_NAMES, start=1):
-            learned, total = quiz.level_stats(items, progress, level)
+            learned, total = quiz.passed_stats(items, progress, level)
             status = "" if level <= unlocked else f" {DIM}(locked){RESET}"
             if exams and prog.exam_passed(progress, source, level):
                 status = f" {GREEN}exam passed{RESET}"

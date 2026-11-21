@@ -258,7 +258,7 @@ Progress is saved to `~/.local/share/monkeydojo/progress.json`.
 --moves     list every shortcut by level
 --plain     line by line quiz instead of the menu
 --stats     show your progress
---reset     delete your progress
+--reset     delete your progress and best combos (with --practice: practice, real and exams)
 ```
 
 ## Development

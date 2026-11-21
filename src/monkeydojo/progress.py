@@ -107,6 +107,14 @@ def save_stats(stats, path=None):
     tmp.replace(path)
 
 
+def reset_stats(modes, path=None):
+    """Forget the records of these modes, like the best combo."""
+    stats = load_stats(path)
+    removed = [stats.pop(mode, None) for mode in modes]
+    if any(r is not None for r in removed):
+        save_stats(stats, path)
+
+
 def record_combo(stats, mode, combo):
     """Keep the best combo of a mode. Return True if it is a new record."""
     entry = stats.setdefault(mode, {})

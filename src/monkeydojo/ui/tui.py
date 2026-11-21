@@ -270,7 +270,10 @@ class App:
     def key(self):
         """Next single key. Keys that arrived together are kept for the next calls."""
         if not self.pending:
-            self.pending.extend(self.read_keys())
+            keys = self.read_keys()
+            if not keys:
+                raise SystemExit  # the terminal was closed
+            self.pending.extend(keys)
         return self.pending.popleft()
 
     def flush_input(self):
@@ -501,7 +504,8 @@ def draw_progress(app, top, x, mode, bindings):
                         app.belt_bar(b.name, 6), (f"  {b.name} belt", curses.A_BOLD)])
         y += 1
         for level in range(1, LAST_LEVEL + 1):
-            learned, total = quiz.level_stats(items, progress, level)
+            # Learned at some point, like the belt: a later mistake does not empty the bar
+            learned, total = quiz.passed_stats(items, progress, level)
             locked = level > unlocked
             attr = curses.A_DIM if locked else 0
             filled = round(width * learned / total) if total else 0

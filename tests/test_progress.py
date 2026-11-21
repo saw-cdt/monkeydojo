@@ -50,3 +50,13 @@ def test_slow_right_answer_keeps_box():
     prog.record_answer(progress, TERMINAL, True, fast=False)
     assert prog.box(progress, TERMINAL) == 2
     assert progress[TERMINAL.id]["correct"] == 3
+
+
+def test_reset_stats_only_forgets_those_modes(tmp_path):
+    path = tmp_path / "stats.json"
+    stats = {}
+    for mode in ("quiz", "practice", "real"):
+        prog.record_combo(stats, mode, 5)
+    prog.save_stats(stats, path)
+    prog.reset_stats(("practice", "real", "exam"), path)
+    assert prog.load_stats(path) == {"quiz": {"best_combo": 5}}

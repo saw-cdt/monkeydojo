@@ -17,13 +17,6 @@ def by_source(bindings):
     return grouped
 
 
-def level_stats(bindings, progress, level):
-    """Return (learned, total) for a level."""
-    items = [b for b in bindings if level_of(b) == level]
-    learned = sum(1 for b in items if prog.is_learned(progress, b))
-    return learned, len(items)
-
-
 def passed_stats(bindings, progress, level):
     """Return (passed, total) for a level. Passed bindings stay passed after a mistake."""
     items = [b for b in bindings if level_of(b) == level]
