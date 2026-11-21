@@ -16,8 +16,12 @@ the same keys. The submap just sits unused between questions and goes away with
 the next config reload. Its name includes a hash of the shortcuts, so a changed
 config gets a new submap instead of a mismatched one.
 
-If the program dies inside the submap, a watchdog timer in Hyprland switches
-back after WATCHDOG seconds.
+Between questions (and during terminal questions) a second "block" submap can
+stay on: it has every Omarchy shortcut bound to nothing and no catchall, so the
+shortcuts do not run but every other key still reaches the terminal.
+
+If the program dies inside a submap, a watchdog timer in Hyprland switches back
+after WATCHDOG seconds. While blocking, a heartbeat keeps pushing that back.
 """
 
 import hashlib
@@ -26,6 +30,7 @@ import os
 import shutil
 import socket
 import subprocess
+import threading
 import time
 
 PREFIX = "monkeydojo"
@@ -42,11 +47,34 @@ SETUP = """
 local M = _G.monkeydojo or {defined = {}}
 _G.monkeydojo = M
 
-function M.disarm()
+function M.release()
   M.deadline = nil
+  M.rest = nil
   if hl.get_current_submap():sub(1, #"%(prefix)s") == "%(prefix)s" then
     hl.dispatch(hl.dsp.submap("reset"))
   end
+end
+
+-- Leave the question submap: back to blocking, or to the normal binds.
+-- The watchdog calls this too, so once the deadline has passed it lets go.
+function M.disarm()
+  if M.rest and not (M.deadline and os.time() > M.deadline) then
+    M.deadline = os.time() + %(watchdog)d
+    hl.dispatch(hl.dsp.submap(M.rest))
+    -- Never stay in the question submap if the block one is missing
+    if hl.get_current_submap() ~= M.rest then M.release() end
+  else
+    M.release()
+  end
+end
+
+function M.block(name)
+  M.rest = name .. "-block"
+  M.disarm()
+end
+
+function M.beat()
+  if M.deadline then M.deadline = os.time() + %(watchdog)d end
 end
 
 function M.arm(name)
@@ -56,13 +84,17 @@ end
 
 function M.define(name, combos)
   if M.defined[name] then return end
+  local function event(text) return hl.dsp.event("%(prefix)s " .. text) end
   hl.define_submap(name, function()
-    local function event(text) return hl.dsp.event("%(prefix)s " .. text) end
     for i, keys in ipairs(combos) do hl.bind(keys, event("key " .. i)) end
     hl.bind("ESCAPE", event("quit"))
     -- Pressing a modifier on its own is the start of a shortcut, not a mistake
     for _, key in ipairs(%(modifiers)s) do hl.bind(key, event("mod"), {ignore_mods = true}) end
     hl.bind("catchall", event("wrong"), {ignore_mods = true})
+  end)
+  -- No catchall here: only the shortcuts are swallowed
+  hl.define_submap(name .. "-block", function()
+    for _, keys in ipairs(combos) do hl.bind(keys, event("blocked")) end
   end)
   M.defined[name] = true
 end
@@ -102,21 +134,28 @@ def setup_code(name, combos):
     return SETUP % params + f"M.define({json.dumps(name)}, {lua_list(combos)})\nreturn 'ready'"
 
 
+# Bump when the submaps change, so a running Hyprland defines them again
+SUBMAP_VERSION = "3"
+
+
 def submap_name(combos):
-    digest = hashlib.sha1("\n".join(combos).encode()).hexdigest()[:8]
+    digest = hashlib.sha1("\n".join([SUBMAP_VERSION, *combos]).encode()).hexdigest()[:8]
     return f"{PREFIX}-{digest}"
 
 
 class Trap:
     """Context manager: listens to Hyprland events and always leaves the submap on exit.
 
-    `combos` is every shortcut that will be asked, in hl.bind format.
+    `combos` is every shortcut that will be asked, in hl.bind format. With `block`,
+    those shortcuts stay blocked for the whole session, not only during questions.
     """
 
-    def __init__(self, combos):
+    def __init__(self, combos, block=False):
         self.combos = sorted(set(combos))
         self.index = {c: i for i, c in enumerate(self.combos, start=1)}
         self.name = submap_name(self.combos)
+        self.block = block
+        self.stopped = threading.Event()
 
     def __enter__(self):
         runtime = os.environ["XDG_RUNTIME_DIR"]
@@ -125,13 +164,25 @@ class Trap:
         self.sock.connect(f"{runtime}/hypr/{signature}/.socket2.sock")
         self.buffer = b""
         lua(setup_code(self.name, self.combos))
+        if self.block:
+            lua(f"_G.monkeydojo.block({json.dumps(self.name)}) return 'ok'")
+            threading.Thread(target=self._heartbeat, daemon=True).start()
         return self
 
     def __exit__(self, *exc):
+        self.stopped.set()
         try:
-            lua("_G.monkeydojo.disarm() return 'ok'")
+            lua("_G.monkeydojo.release() return 'ok'")
         finally:
             self.sock.close()
+
+    def _heartbeat(self):
+        # If this process dies the beats stop, and the watchdog gives the keys back
+        while not self.stopped.wait(WATCHDOG / 3):
+            try:
+                lua("_G.monkeydojo.beat() return 'ok'")
+            except (HyprlandError, OSError, subprocess.SubprocessError):
+                pass
 
     def ask(self, targets, timeout):
         """Wait for one answer to a question whose right shortcuts are `targets`.

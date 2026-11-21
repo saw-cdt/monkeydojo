@@ -83,8 +83,12 @@ EXAM_PAUSE = 1.5
 
 
 @contextmanager
-def keyboard(view, bindings, real_mode=False):
-    """Everything a session needs to read answers. Yield (trap, sandbox)."""
+def keyboard(view, bindings, real_mode=False, block=()):
+    """Everything a session needs to read answers. Yield (trap, sandbox).
+
+    Omarchy shortcuts of `bindings` and `block` never run during the session,
+    not even between questions or during LazyVim ones.
+    """
     # Make sure the submap is removed if the terminal is closed or the process is killed
     def stop(signum, frame):
         raise SystemExit(1)
@@ -98,8 +102,8 @@ def keyboard(view, bindings, real_mode=False):
             view.message("Setting up the sandbox workspace...")
             sandbox = stack.enter_context(real.Sandbox())
             view.sandbox_ready(sandbox)
-        has_omarchy = any(b.source == "omarchy" for b in bindings)
-        trap = stack.enter_context(hyprland.Trap(omarchy_combos(bindings))) if has_omarchy else None
+        combos = omarchy_combos([*bindings, *block])
+        trap = stack.enter_context(hyprland.Trap(combos, block=True)) if combos else None
         yield trap, sandbox
 
 
@@ -130,7 +134,7 @@ def answer(view, ask, length, score):
     return True, fast, pressed
 
 
-def run(bindings, progress, save, view=None, forced_level=None, real_mode=False, rng=random):
+def run(bindings, progress, save, view=None, forced_level=None, real_mode=False, rng=random, block=()):
     """Ask until the user quits. Return the Score."""
     view = view or PlainView()
     pool, levels = quiz.build_pool(bindings, progress, forced_level, exams=True)
@@ -140,7 +144,7 @@ def run(bindings, progress, save, view=None, forced_level=None, real_mode=False,
 
     score = Score()
     last = None
-    with keyboard(view, bindings, real_mode) as (trap, sandbox):
+    with keyboard(view, bindings, real_mode, block) as (trap, sandbox):
         try:
             while True:
                 new = learn.next_new(pool, progress)
@@ -185,7 +189,7 @@ def run(bindings, progress, save, view=None, forced_level=None, real_mode=False,
     return score
 
 
-def exam(bindings, progress, save, view=None, rng=random):
+def exam(bindings, progress, save, view=None, rng=random, block=()):
     """Belt exam: every binding of the current level once, all right and fast.
 
     A fast right answer counts the binding as learned, even if the exam is failed.
@@ -204,7 +208,7 @@ def exam(bindings, progress, save, view=None, rng=random):
 
     score = Score()
     # Every shortcut of these sources can be caught, so a wrong one can be named
-    with keyboard(view, [b for b in bindings if b.source in plan]) as (trap, _):
+    with keyboard(view, [b for b in bindings if b.source in plan], block=block) as (trap, _):
         try:
             for binding in questions:
                 description, ask, shown, length, _ = prepare(view, trap, binding, rng)

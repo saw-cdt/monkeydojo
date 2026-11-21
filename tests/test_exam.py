@@ -65,7 +65,7 @@ class FakeExamView:
 
 def run_exam(monkeypatch, bindings, progress, wrong=(), slow=()):
     @contextmanager
-    def keyboard(view, bindings, real_mode=False):
+    def keyboard(view, bindings, real_mode=False, block=()):
         yield None, None
 
     def prepare(view, trap, binding, rng, exclude=()):

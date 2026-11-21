@@ -335,11 +335,12 @@ class App:
             view = QuizView(self, bindings, progress)
             terminal.run(bindings, progress, save, view, forced_level=self.level)
         elif mode == "exam":
-            practice.exam(bindings, progress, save, ExamView(self, bindings, progress))
+            practice.exam(bindings, progress, save, ExamView(self, bindings, progress),
+                          block=self.bindings_for("practice", "omarchy"))
         else:
             view = PracticeView(self, bindings, progress, mode)
             practice.run(bindings, progress, save, view, forced_level=self.level,
-                         real_mode=mode == "real")
+                         real_mode=mode == "real", block=self.bindings_for("practice", "omarchy"))
 
     def new_belt(self, source, b):
         """Full screen celebration, until a key is pressed."""
